@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+package-lock.json
+**/dist/
+**/dist-cjs/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Config (contains password)
+config.json
+
+# Diagnostic files
+explore_*.json
+cdp_*.json
+diagnose.mjs
+
+# Push notification subscriptions
+.push-subscriptions.json
+.gitnexus
+docs/
+
+# AI agent config
+.claude/
+# Debug/temp snapshot files
+temp_snapshot.html
+editor_snapshot*.html
+test-monaco-dom.js
+*.html.bak

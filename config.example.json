@@ -1,0 +1,21 @@
+{
+    "password": "monitor",
+    "port": 3563,
+    "antigravityPath": "",
+    "cdpPorts": [
+        9000,
+        9001,
+        9002,
+        9003
+    ],
+    "managerUrl": "http://127.0.0.1:8045",
+    "managerPassword": "",
+    "authSecret": "",
+    "vapidKeys": null,
+    "vapidSubject": "mailto:noreply@example.com",
+    "autoActions": {
+        "autoAcceptAll": false,
+        "autoRetry": false,
+        "retryBackoff": true
+    }
+}
