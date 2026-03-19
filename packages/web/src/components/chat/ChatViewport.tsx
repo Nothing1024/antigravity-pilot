@@ -54,10 +54,40 @@ function buildIdeStyle(
   `;
 }
 
+/** Remove empty skeleton placeholder divs that IDE emits while streaming content.
+ *  Skeletons are identified as: empty divs (no children, no text) with an
+ *  explicit pixel height in their inline style — e.g. style="height: 2016.68px;"
+ *  After removal, prune any ancestor divs that became empty as a result.
+ */
+function stripSkeletons(root: HTMLElement): void {
+  const candidates = root.querySelectorAll<HTMLElement>("div[style*='height:'], div[style*='height: ']");
+  const emptyParents = new Set<HTMLElement>();
+
+  for (const el of candidates) {
+    if (el.children.length === 0 && el.textContent?.trim() === "") {
+      const parent = el.parentElement;
+      el.remove();
+      if (parent && parent !== root) emptyParents.add(parent);
+    }
+  }
+
+  // Walk up: remove wrapper divs that became empty after skeleton removal
+  for (const parent of emptyParents) {
+    let node: HTMLElement | null = parent;
+    while (node && node !== root && node.children.length === 0 && node.textContent?.trim() === "") {
+      const grandparent = node.parentElement;
+      node.remove();
+      node = grandparent as HTMLElement | null;
+    }
+  }
+}
+
 function safeSetContent(viewport: HTMLElement, html: string): void {
   const temp = document.createElement("div");
   temp.id = "chat-viewport";
   temp.innerHTML = html;
+
+  stripSkeletons(temp);
 
   try {
     morphdom(viewport, temp, {
@@ -67,7 +97,7 @@ function safeSetContent(viewport: HTMLElement, html: string): void {
       }
     });
   } catch {
-    viewport.innerHTML = html;
+    viewport.innerHTML = temp.innerHTML;
   }
 }
 
@@ -194,6 +224,13 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
         }
         
         /* ─── Content polish ─── */
+        /* Constrain icon-sized SVGs to their intended size.
+           IDE injects SVGs with viewBox="0 0 24 24" that expand to fill
+           the container if no width/height CSS is applied. */
+        svg[viewBox="0 0 24 24"] {
+          max-width: 24px !important;
+          max-height: 24px !important;
+        }
         img { max-width: 100%; height: auto; border-radius: 6px; }
         pre { 
           overflow-x: auto; 
