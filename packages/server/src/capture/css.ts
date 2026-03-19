@@ -96,14 +96,23 @@ export async function captureComputedVars(cdp: CDPConnection): Promise<ComputedV
             const val = cs.getPropertyValue(key).trim();
             if (val) vars[key] = val;
         }
-        // Broad scan: capture ALL custom properties from stylesheets and inline styles
+        // Broad scan: capture ALL custom properties from ALL CSS rules
         const allProps = new Set();
-        // From stylesheets (:root / :host rules)
+        // From ALL stylesheet rules (not just :root/:host — IDEs define vars
+        // on .dark, body, [data-theme], etc.)
         Array.from(document.styleSheets).forEach(sheet => {
             try {
                 Array.from(sheet.cssRules).forEach(r => {
-                    if (r.selectorText === ':root' || r.selectorText === ':host') {
-                        Array.from(r.style || []).filter(p => p.startsWith('--')).forEach(p => allProps.add(p));
+                    if (r.style) {
+                        Array.from(r.style).filter(p => p.startsWith('--')).forEach(p => allProps.add(p));
+                    }
+                    // Also check rules inside @media blocks
+                    if (r.cssRules) {
+                        Array.from(r.cssRules).forEach(inner => {
+                            if (inner.style) {
+                                Array.from(inner.style).filter(p => p.startsWith('--')).forEach(p => allProps.add(p));
+                            }
+                        });
                     }
                 });
             } catch(e) {}
@@ -114,14 +123,21 @@ export async function captureComputedVars(cdp: CDPConnection): Promise<ComputedV
             const prop = rootStyle[i];
             if (prop.startsWith('--')) allProps.add(prop);
         }
+        // From document.body inline style
+        const bodyStyle = document.body.style;
+        for (let i = 0; i < bodyStyle.length; i++) {
+            const prop = bodyStyle[i];
+            if (prop.startsWith('--')) allProps.add(prop);
+        }
+        // Resolve values: try documentElement first, then body (catches theme-scoped vars)
+        const bodyCom = getComputedStyle(document.body);
         for (const prop of allProps) {
             if (!vars[prop]) {
-                const val = cs.getPropertyValue(prop).trim();
+                const val = cs.getPropertyValue(prop).trim() || bodyCom.getPropertyValue(prop).trim();
                 if (val) vars[prop] = val;
             }
         }
         // Capture body computed background & color as fallback
-        const bodyCom = getComputedStyle(document.body);
         vars['__bodyBg'] = bodyCom.backgroundColor;
         vars['__bodyColor'] = bodyCom.color;
         vars['__bodyFontFamily'] = bodyCom.fontFamily;
