@@ -64,7 +64,7 @@ export function MessageInput({ cascadeId }: Props) {
   const canSend = !!cascadeId && !sending && !!text.trim();
 
   return (
-    <div className="border-t border-border/20 bg-gradient-to-t from-background via-background to-transparent px-3 sm:px-5 pt-2.5 pb-[calc(0.625rem+var(--safe-area-bottom))]">
+    <div className="border-t border-border/20 bg-gradient-to-t from-background via-background to-transparent px-3 sm:px-5 pt-1 pb-[calc(0.625rem+var(--safe-area-bottom))]">
       <div className="max-w-2xl mx-auto">
         <div
           className={[
