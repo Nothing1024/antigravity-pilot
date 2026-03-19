@@ -1,0 +1,17 @@
+{
+  "name": "Antigravity Pilot",
+  "short_name": "AG Pilot",
+  "description": "Monitor & interact with Antigravity AI chat sessions from your phone",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
