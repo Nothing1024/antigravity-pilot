@@ -1,4 +1,4 @@
-﻿import morphdom from "morphdom";
+import morphdom from "morphdom";
 import { useEffect, useMemo, useRef } from "react";
 
 import { useClickPassthrough } from "../../hooks/useClickPassthrough";
@@ -6,10 +6,15 @@ import { useCascadeStyles } from "../../hooks/useCascadeStyles";
 import { useSnapshot } from "../../hooks/useSnapshot";
 import { FilePreview } from "../modals/FilePreview";
 import { PopupBubble } from "./PopupBubble";
+import type { FileChange } from "./FileChangesBar";
+import type { ToolbarButton } from "./ToolbarButtonsBar";
 
 type Props = {
   cascadeId: string | null;
   onContentUpdate?: () => void;
+  onFileChanges?: (files: FileChange[]) => void;
+  onToolbarButtons?: (buttons: ToolbarButton[]) => void;
+  onActionButtons?: (actions: ToolbarButton[]) => void;
 };
 
 function buildIdeStyle(
@@ -90,8 +95,8 @@ function buildIdeStyle(
     .items-center { align-items: center; }
     .justify-center { justify-content: center; }
     .p-4 { padding: 1rem; }
-    .bg-black\\/40 { background-color: rgb(0 0 0 / 0.4); }
-    .border-gray-500\\/20 { border-color: rgb(107 114 128 / 0.2); }
+    .bg-black\/40 { background-color: rgb(0 0 0 / 0.4); }
+    .border-gray-500\/20 { border-color: rgb(107 114 128 / 0.2); }
     .translate-y-0 { --tw-translate-y: 0px; transform: translateY(var(--tw-translate-y)); }
     .max-w-\\[95\\%\\] { max-width: 95%; }
     .opacity-0 { opacity: 0 !important; }
@@ -147,12 +152,233 @@ function stripSkeletons(root: HTMLElement): void {
   }
 }
 
-function safeSetContent(viewport: HTMLElement, html: string): void {
+/** Hide IDE-specific UI, extract file changes + toolbar button data */
+function fixToolbarLayout(root: HTMLElement): { files: FileChange[]; buttons: ToolbarButton[]; actions: ToolbarButton[] } {
+  const fileChanges: FileChange[] = [];
+  const toolbarButtons: ToolbarButton[] = [];
+  const actionButtons: ToolbarButton[] = [];
+
+  // Extract ONLY the toolbar trigger buttons (Planning, Model selector, etc.)
+  // and the "+" context button + credit info. Hide the container afterward.
+  const inputBox = root.querySelector('[id="antigravity.agentSidePanelInputBox"]');
+  if (inputBox instanceof HTMLElement) {
+    const seen = new Set<string>();
+
+    // 1. Extract the "+" (add context) button 鈥?icon-only, first aria-haspopup="dialog" with plus icon
+    const plusWrapper = inputBox.querySelector('[role="button"][aria-haspopup="dialog"]');
+    if (plusWrapper) {
+      const plusBtn = plusWrapper.querySelector('[data-cdp-click]') || plusWrapper.closest('[data-cdp-click]');
+      if (plusBtn) {
+        const idx = parseInt(plusBtn.getAttribute('data-cdp-click') || '', 10);
+        if (Number.isFinite(idx)) {
+          toolbarButtons.push({ label: '', cdpIndex: idx, icon: 'plus' });
+        }
+      }
+    }
+
+    // 2. Extract text-labeled trigger buttons (Planning, Model name)
+    inputBox.querySelectorAll('[data-cdp-click]').forEach((el) => {
+      const text = (el.textContent || '').trim();
+      const idx = parseInt(el.getAttribute('data-cdp-click') || '', 10);
+      if (!text || !Number.isFinite(idx)) return;
+
+      // Skip elements inside popup/dropdown overlays
+      let parent = el.parentElement;
+      let insideOverlay = false;
+      while (parent && parent !== inputBox) {
+        const style = parent.getAttribute('style') || '';
+        const cls = parent.className || '';
+        if (
+          /position:\s*(fixed|absolute)/i.test(style) ||
+          /\b(fixed|absolute)\b/.test(typeof cls === 'string' ? cls : '') ||
+          parent.getAttribute('role') === 'listbox' ||
+          parent.getAttribute('role') === 'dialog'
+        ) {
+          insideOverlay = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      if (insideOverlay) return;
+
+      if (text.length > 40) return;
+      if (/^send$/i.test(text)) return;
+
+      const key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      toolbarButtons.push({ label: text, cdpIndex: idx });
+    });
+
+    // 3. Extract credit info text (e.g. "Using AI Credit Overages")
+    const creditEl = inputBox.querySelector('[data-tooltip-id^="P0-"]');
+    if (creditEl instanceof HTMLElement) {
+      const creditText = (creditEl.textContent || '').trim();
+      if (creditText) {
+        toolbarButtons.push({ label: creditText, cdpIndex: -1, icon: 'credit' });
+      }
+    }
+
+    // Remove the entire container from the DOM 鈥?buttons are rendered natively
+    inputBox.remove();
+  }
+
+  // Extract file changes data AND action buttons from the .outline-solid toolbar,
+  // then hide it. Actions like "Review Changes", "Reject all", "Accept all" are
+  // rendered natively in FileChangesBar.
+  const toolbar = root.querySelector('.outline-solid');
+  if (toolbar instanceof HTMLElement) {
+    // Find file change items 鈥?they are in a flex-col container with cursor-pointer rows
+    const fileContainer = toolbar.querySelector('div[class*="flex-col"]');
+    const items = (fileContainer || toolbar).querySelectorAll('div[class*="cursor-pointer"][class*="items-center"]');
+    items.forEach((item) => {
+      const addedEl = item.querySelector('span[class*="text-green"]');
+      const removedEl = item.querySelector('span[class*="text-red"]');
+      const nameEl = item.querySelector('span[class*="whitespace-nowrap"][class*="opacity"]') || item.querySelector('span[class*="break-all"]');
+      if (nameEl) {
+        fileChanges.push({
+          name: nameEl.textContent?.trim() || 'unknown',
+          added: parseInt(addedEl?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+          removed: parseInt(removedEl?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+        });
+      }
+    });
+
+    // Extract action buttons 鈥?both icon-only buttons (identified by tooltip)
+    // and text buttons (e.g. "Review Changes", "Reject all", "Accept all")
+    const seen = new Set<string>();
+
+    // 1. Icon-only buttons: identified by data-tooltip-id
+    const tooltipMap: Record<string, string> = {
+      'tooltip-changesOverview': 'changesOverview',
+      'tooltip-terminal': 'terminal',
+      'tooltip-artifacts': 'artifacts',
+      'tooltip-browser': 'browser',
+    };
+    for (const [tooltipId, iconName] of Object.entries(tooltipMap)) {
+      const el = toolbar.querySelector(`[data-tooltip-id="${tooltipId}"]`);
+      if (el instanceof HTMLElement) {
+        const cdpEl = el.closest('[data-cdp-click]') || el.querySelector('[data-cdp-click]');
+        const idx = parseInt(cdpEl?.getAttribute('data-cdp-click') || '', 10);
+        if (Number.isFinite(idx)) {
+          actionButtons.push({ label: '', cdpIndex: idx, icon: iconName });
+          seen.add(iconName);
+        }
+      }
+    }
+
+    // 2. Text-labeled buttons (e.g. "Review Changes", "Reject all", "Accept all")
+    toolbar.querySelectorAll('[data-cdp-click]').forEach((el) => {
+      // Skip file-change rows
+      if (el.closest('div[class*="cursor-pointer"][class*="items-center"]') &&
+          el.closest('div[class*="flex-col"]')) return;
+      const text = (el.textContent || '').trim();
+      const idx = parseInt(el.getAttribute('data-cdp-click') || '', 10);
+      if (!text || !Number.isFinite(idx)) return;
+      if (text.length > 30) return;
+      const key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      actionButtons.push({ label: text, cdpIndex: idx });
+    });
+
+    // Remove the entire toolbar from the DOM 鈥?rendered natively in FileChangesBar
+    toolbar.remove();
+  }
+
+  // Remove broken IDE icon images (local file paths that can't load in browser)
+  root.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src') || '';
+    if (/^\/[a-zA-Z]:/.test(src) || src.includes('/extensions/theme-symbols/')) {
+      const parent = img.parentElement;
+      if (parent && parent.tagName === 'DIV' && parent.children.length === 1) {
+        parent.remove();
+      } else {
+        img.remove();
+      }
+    }
+  });
+
+  // Fix broken paragraph flow from file mentions
+  // IDE markdown renderer splits: <p>text <mention/></p><span>filename</span> rest<p></p>
+  // Fix: merge orphaned inline nodes back into the preceding <p>
+  const messageDivs = root.querySelectorAll('div[class*="leading-relaxed"][class*="select-text"]');
+  messageDivs.forEach((div) => {
+    const children = Array.from(div.childNodes);
+    let lastP: HTMLElement | null = null;
+
+    for (const child of children) {
+      if (child instanceof HTMLElement && child.tagName === 'P') {
+        if (child.textContent?.trim()) {
+          lastP = child;
+        } else {
+          // Empty <p> 鈥?remove it
+          child.remove();
+        }
+      } else if (lastP) {
+        // Orphaned inline content (span, text, code) 鈥?merge into preceding <p>
+        const tag = child instanceof HTMLElement ? child.tagName : '';
+        const isBlock = ['DIV', 'PRE', 'UL', 'OL', 'TABLE', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'HR'].includes(tag);
+        if (!isBlock) {
+          lastP.appendChild(child);
+        } else {
+          lastP = null; // Stop merging after a block element
+        }
+      }
+    }
+  });
+
+  // Deduplicate <style> blocks 鈥?each message has identical markdown-alert CSS
+  const styles = root.querySelectorAll('style');
+  const seen = new Set<string>();
+  styles.forEach((style) => {
+    const key = style.textContent?.trim().substring(0, 80) || '';
+    if (seen.has(key)) {
+      style.remove();
+    } else {
+      seen.add(key);
+    }
+  });
+
+  // Fix sticky header stacking in Progress Updates
+  root.querySelectorAll('.sticky').forEach((el) => {
+    (el as HTMLElement).style.position = 'relative';
+  });
+
+  // Remove gradient overlays that obscure content
+  root.querySelectorAll('div[class*="bg-gradient-to-b"][class*="from-ide-task"]').forEach((el) => {
+    el.remove();
+  });
+
+  // Hide IDE agent action buttons (Close Agent View, Undo Changes, etc.)
+  // These leak into the chat content but should not be visible in Pilot.
+  root.querySelectorAll('span[role="button"], button').forEach((el) => {
+    const text = (el.textContent || '').trim().toLowerCase();
+    if (
+      text.includes('close agent view') ||
+      text.includes('undo changes up to this point') ||
+      text.includes('close agent')
+    ) {
+      const wrapper = el.closest('div[class*="flex"][class*="items-center"]') || el.parentElement;
+      if (wrapper) {
+        (wrapper as HTMLElement).style.display = 'none';
+      } else {
+        (el as HTMLElement).style.display = 'none';
+      }
+    }
+  });
+
+  return { files: fileChanges, buttons: toolbarButtons, actions: actionButtons };
+}
+
+function safeSetContent(viewport: HTMLElement, html: string): { files: FileChange[]; buttons: ToolbarButton[]; actions: ToolbarButton[] } {
   const temp = document.createElement("div");
   temp.id = "chat-viewport";
   temp.innerHTML = html;
 
   stripSkeletons(temp);
+  const result = fixToolbarLayout(temp);
 
   try {
     morphdom(viewport, temp, {
@@ -164,9 +390,11 @@ function safeSetContent(viewport: HTMLElement, html: string): void {
   } catch {
     viewport.innerHTML = temp.innerHTML;
   }
+
+  return result;
 }
 
-export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
+export function ChatViewport({ cascadeId, onContentUpdate, onFileChanges, onToolbarButtons, onActionButtons }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const shadowRef = useRef<ShadowRoot | null>(null);
 
@@ -363,6 +591,16 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           z-index: 10;
           background: var(--vscode-editor-background, var(--ag-body-bg, hsl(var(--background, 0 0% 100%))));
         }
+        /* Hide IDE input box area entirely via CSS (prevents FOUC of the + button).
+           The toolbar buttons are extracted by JS in fixToolbarLayout and rendered
+           natively in ToolbarButtonsBar, so the original container is not needed. */
+        #antigravity\\.agentSidePanelInputBox {
+          display: none !important;
+        }
+        /* Also hide the file-changes toolbar container (rendered natively in FileChangesBar) */
+        .outline-solid[class*="z-20"][class*="justify-between"] {
+          display: none !important;
+        }
         /* Ensure popup dialogs aren't clipped by overflow */
         [role="dialog"][style*="position: fixed"] {
           z-index: 100 !important;
@@ -378,9 +616,39 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
       </div>
     `;
 
-    // Click handler for code blocks: expand/collapse
+    // Click handler for code blocks: expand/collapse AND native copy
     root.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
+
+      // 鈹€鈹€ Handle Copy buttons 鈹€鈹€
+      // IDE code blocks have a Copy button (may be <button>, <span>, or <div>
+      // with text "Copy" or an aria-label="Copy"). We intercept these and
+      // use navigator.clipboard directly since they lack data-cdp-click.
+      const copyBtn = target.closest('button, span[role="button"], div[role="button"]');
+      if (copyBtn) {
+        const text = (copyBtn.textContent || '').trim().toLowerCase();
+        const label = (copyBtn.getAttribute('aria-label') || '').toLowerCase();
+        const isCopyLabel = text === 'copy' || text === 'copied' || label === 'copy' || label === 'copy code';
+        // Only intercept copy buttons that are inside a code block container
+        const inCodeBlock = !!copyBtn.closest('pre, [class*="code-block"], [class*="codeBlock"], [class*="CodeBlock"]');
+        if (isCopyLabel && inCodeBlock) {
+          e.stopPropagation();
+          // Find the nearest <pre> or code block
+          const container = copyBtn.closest('div') || copyBtn.parentElement;
+          const pre = container?.querySelector('pre') || container?.parentElement?.querySelector('pre')
+                      || copyBtn.closest('[class*="code"]')?.querySelector('pre');
+          if (pre) {
+            const code = pre.querySelector('code')?.textContent || pre.textContent || '';
+            navigator.clipboard.writeText(code).then(() => {
+              // Briefly show "Copied" feedback
+              const orig = copyBtn.textContent;
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+            }).catch(() => { /* ignore clipboard errors */ });
+          }
+          return;
+        }
+      }
 
       // 鈹€鈹€ Toggle expand/collapse on <pre> blocks 鈹€鈹€
       const pre = target.closest?.("pre");
@@ -392,7 +660,7 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
     const root = shadowRef.current;
     if (!root) return;
 
-    // 1. Update IDE-specific styles
+    // 1. Update IDE-specific styles (must happen BEFORE content)
     const styleEl = root.getElementById("ide-style");
     if (styleEl) styleEl.textContent = ideStyleText;
 
@@ -415,19 +683,19 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
       varsCss += "}";
       themeStyle.textContent = varsCss;
     }
-  }, [ideStyleText]);
 
-  useEffect(() => {
-    const root = shadowRef.current;
-    if (!root) return;
-
+    // 3. Inject content AFTER styles are in place
     const viewport = root.getElementById("chat-viewport");
     if (!(viewport instanceof HTMLElement)) return;
     if (!snapshot?.html) return;
 
-    safeSetContent(viewport, snapshot.html);
+    const { files, buttons, actions } = safeSetContent(viewport, snapshot.html);
+    onFileChanges?.(files);
+    onToolbarButtons?.(buttons);
+    onActionButtons?.(actions);
+
     onContentUpdate?.();
-  }, [snapshot?.html]);
+  }, [ideStyleText, snapshot?.html]);
 
   return (
     <>

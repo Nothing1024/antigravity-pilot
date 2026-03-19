@@ -72,18 +72,34 @@ export function useSnapshot(cascadeId: string | null): Result {
     return () => abortRef.current?.abort();
   }, [cascadeId, fetchSnapshot]);
 
-  // WS push: receive snapshot data directly — no second HTTP fetch needed
+  // WS push: receive snapshot data directly 鈥?throttled to avoid excessive re-renders
   useEffect(() => {
     if (!cascadeId) return;
+
+    let pending: Snapshot | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const THROTTLE_MS = 500;
+
+    const flush = () => {
+      if (pending) {
+        setSnapshot(pending);
+        setError(null);
+        pending = null;
+      }
+      timer = null;
+    };
 
     const off = wsManager.onMessage((msg) => {
       if (msg.type !== "snapshot_update") return;
       if (msg.cascadeId !== cascadeId) return;
-      // P0 optimization: snapshot data is now included in the WS message
-      setSnapshot(msg.snapshot);
-      setError(null);
+      pending = msg.snapshot;
+      if (!timer) timer = setTimeout(flush, THROTTLE_MS);
     });
-    return () => off();
+
+    return () => {
+      off();
+      if (timer) clearTimeout(timer);
+    };
   }, [cascadeId]);
 
   const refresh = useCallback(() => {
