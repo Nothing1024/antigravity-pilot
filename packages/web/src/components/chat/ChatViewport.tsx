@@ -1,4 +1,4 @@
-import morphdom from "morphdom";
+﻿import morphdom from "morphdom";
 import { useEffect, useMemo, useRef } from "react";
 
 import { useClickPassthrough } from "../../hooks/useClickPassthrough";
@@ -56,7 +56,7 @@ function buildIdeStyle(
 
 /** Remove empty skeleton placeholder divs that IDE emits while streaming content.
  *  Skeletons are identified as: empty divs (no children, no text) with an
- *  explicit pixel height in their inline style — e.g. style="height: 2016.68px;"
+ *  explicit pixel height in their inline style 鈥?e.g. style="height: 2016.68px;"
  *  After removal, prune any ancestor divs that became empty as a result.
  */
 function stripSkeletons(root: HTMLElement): void {
@@ -142,7 +142,7 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           -moz-osx-font-smoothing: grayscale;
         }
         
-        /* ─── CSS Reset for IDE elements ─── */
+        /* 鈹€鈹€鈹€ CSS Reset for IDE elements 鈹€鈹€鈹€ */
         button, input, select, textarea {
           border: none;
           outline: none;
@@ -173,7 +173,7 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           to { opacity: 1; transform: translateY(0); }
         }
         
-        /* ─── Reduce excessive IDE padding ─── */
+        /* 鈹€鈹€鈹€ Reduce excessive IDE padding 鈹€鈹€鈹€ */
         #chat-viewport [class*="pt-[30vh]"] {
           padding-top: 8vh !important;
         }
@@ -181,7 +181,7 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           padding-top: 6vh !important;
         }
         
-        /* ─── Loading State ─── */
+        /* 鈹€鈹€鈹€ Loading State 鈹€鈹€鈹€ */
         .loading { 
           display: flex; 
           flex-direction: column;
@@ -204,26 +204,24 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           to { transform: rotate(360deg); }
         }
         
-        /* ─── Trap fixed-positioned IDE popups ─── */
+        /* 鈹€鈹€鈹€ Trap fixed-positioned IDE popups 鈹€鈹€鈹€ */
         #chat-viewport [style*="position: fixed"],
         #chat-viewport [style*="position:fixed"] {
           position: absolute !important;
         }
         
-        /* ─── Interactive clickable elements ─── */
+        /* 鈹€鈹€鈹€ Interactive clickable elements 鈹€鈹€鈹€ */
         [data-cdp-click] { 
           cursor: pointer !important; 
-          transition: opacity 0.15s ease, filter 0.15s ease; 
         }
         [data-cdp-click]:hover { 
-          opacity: 0.85; 
-          filter: brightness(1.05);
+          filter: brightness(1.08);
         }
         [data-cdp-click]:active { 
-          opacity: 0.7; 
+          filter: brightness(0.95);
         }
         
-        /* ─── Content polish ─── */
+        /* 鈹€鈹€鈹€ Content polish 鈹€鈹€鈹€ */
         /* Constrain icon-sized SVGs to their intended size.
            IDE injects SVGs with viewBox="0 0 24 24" that expand to fill
            the container if no width/height CSS is applied. */
@@ -237,12 +235,33 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           max-width: 100%; 
           border-radius: 8px;
           font-size: 13px;
+          white-space: pre-wrap;
+          word-break: break-word;
+          /* 鈹€鈹€鈹€ Collapsed code blocks 鈹€鈹€鈹€ */
+          max-height: 300px;
+          overflow-y: hidden;
+          position: relative;
+          cursor: pointer;
+          transition: max-height 0.3s ease;
+        }
+        pre.ag-expanded {
+          max-height: none;
+          overflow-y: auto;
+        }
+        pre:not(.ag-expanded)::after {
+          content: "";
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          height: 48px;
+          background: linear-gradient(transparent, var(--vscode-editor-background, var(--ag-body-bg, #0d1117)));
+          pointer-events: none;
+          border-radius: 0 0 8px 8px;
         }
         code {
           font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, monospace;
         }
         
-        /* ─── Minimal Scrollbar ─── */
+        /* 鈹€鈹€鈹€ Minimal Scrollbar 鈹€鈹€鈹€ */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { 
@@ -253,7 +272,7 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
           background: hsl(var(--muted, 240 3.7% 15.9%) / 0.45); 
         }
         
-        /* ─── Smooth scroll ─── */
+        /* 鈹€鈹€鈹€ Smooth scroll 鈹€鈹€鈹€ */
         * { scroll-behavior: smooth; }
       </style>
       <style id="ide-style"></style>
@@ -265,6 +284,15 @@ export function ChatViewport({ cascadeId, onContentUpdate }: Props) {
         </div>
       </div>
     `;
+
+    // Click handler for code blocks: expand/collapse
+    root.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+
+      // 鈹€鈹€ Toggle expand/collapse on <pre> blocks 鈹€鈹€
+      const pre = target.closest?.("pre");
+      if (pre) pre.classList.toggle("ag-expanded");
+    });
   }, []);
 
   useEffect(() => {
