@@ -31,24 +31,24 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[var(--bg-primary)] px-6 text-center">
+        <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
           <div className="text-5xl">⚠️</div>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          <h1 className="text-lg font-semibold text-foreground">
             Something went wrong
           </h1>
-          <p className="max-w-sm text-sm text-[var(--text-muted)]">
+          <p className="max-w-sm text-sm text-muted-foreground">
             {this.state.error?.message || "An unexpected error occurred."}
           </p>
           <button
             type="button"
-            className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-2 text-sm font-medium text-[var(--accent)] active:bg-[var(--bg-tertiary)]"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-primary hover:bg-muted/50 transition-colors"
             onClick={this.handleReset}
           >
             Try Again
           </button>
           <button
             type="button"
-            className="text-xs text-[var(--text-muted)] underline"
+            className="text-xs text-muted-foreground underline"
             onClick={() => window.location.reload()}
           >
             Reload Page

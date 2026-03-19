@@ -28,7 +28,7 @@ type AnchoredPos = { left: number; top?: number; bottom?: number };
 
 function Header({ children }: { children: ReactNode }) {
   return (
-    <div className="px-3 pt-3 pb-2 text-xs font-semibold tracking-wide text-[var(--text-muted)]">
+    <div className="px-2 pt-1.5 pb-0.5 text-[10px] uppercase font-semibold tracking-wider text-[var(--text-muted)] opacity-70">
       {children}
     </div>
   );
@@ -72,14 +72,10 @@ export function PopupBubble({
       let left = anchor.x - rect.width / 2;
       left = clamp(left, 16, Math.max(16, vw - rect.width - 16));
 
-      const spaceBelow = vh - anchor.y;
+      // Always pop above the trigger point (like a native dropdown)
       let top: number | undefined;
       let bottom: number | undefined;
-      if (spaceBelow >= rect.height + 20) {
-        top = anchor.y + 12;
-      } else {
-        bottom = clamp(vh - anchor.y + 12, 12, vh - 12);
-      }
+      bottom = clamp(vh - anchor.y + 8, 12, vh - 12);
 
       setAnchoredPos({ left, top, bottom });
     });
@@ -99,41 +95,46 @@ export function PopupBubble({
     : undefined;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[var(--z-modal)] bg-[var(--bg-overlay)]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
+    <>
+      {/* Transparent click-away dismissal layer — no backdrop */}
+      <div
+        className="fixed inset-0 z-[var(--z-modal)]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <div
         ref={cardRef}
         className={[
-          "fixed w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-[var(--radius-lg)]",
-          "border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-[var(--shadow-lg)]",
-          anchor ? "" : "left-1/2 bottom-4 -translate-x-1/2"
+          "fixed z-[var(--z-modal)] w-[min(260px,calc(100vw-32px))] overflow-hidden rounded-xl",
+          "border border-border/20 bg-background/95 text-foreground shadow-lg backdrop-blur-xl",
+          anchor ? "" : "left-1/2 top-4 -translate-x-1/2"
         ].join(" ")}
         style={cardStyle}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         {title ? (
-          <div className="flex items-center gap-2 border-b border-[var(--border-light)] px-3 py-3">
-            <div className="min-w-0 flex-1 truncate text-sm font-semibold">
+          <div className="flex items-center gap-2 border-b border-border/10 px-3 py-2 bg-muted/20">
+            <div className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
               {title}
             </div>
             <button
               type="button"
-              className="grid h-8 w-8 place-items-center rounded-md text-sm active:bg-[var(--bg-tertiary)]"
+              className="grid h-6 w-6 place-items-center rounded-md text-xs hover:bg-muted/50 transition-colors"
               onClick={onClose}
               aria-label="Close"
             >
-              ✕
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
             </button>
           </div>
         ) : null}
 
-        <div className="max-h-[min(60dvh,520px)] overflow-auto">
+        <div className="max-h-[min(60dvh,400px)] overflow-auto p-1">
           {rows.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-[var(--text-muted)]">
+            <div className="px-2 py-3 text-xs text-muted-foreground text-center">
               No options
             </div>
           ) : null}
@@ -144,9 +145,9 @@ export function PopupBubble({
               <button
                 type="button"
                 className={[
-                  "flex w-full items-start gap-3 px-3 py-3 text-left text-sm",
-                  "border-t border-[var(--border-light)] first:border-t-0",
-                  "active:bg-[var(--bg-tertiary)]"
+                  "flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs rounded-md",
+                  "hover:bg-muted/50 active:bg-muted/70",
+                  "transition-colors"
                 ].join(" ")}
                 onClick={() => onSelect(item)}
               >
@@ -158,7 +159,7 @@ export function PopupBubble({
                         {item.badges.slice(0, 3).map((b) => (
                           <span
                             key={b}
-                            className="rounded-full bg-[var(--accent-bg)] px-2 py-0.5 text-[11px] text-[var(--accent)]"
+                            className="rounded-[4px] bg-[hsl(var(--primary)_/_0.1)] px-1.5 py-[1px] text-[9px] font-medium text-[hsl(var(--primary))] uppercase"
                           >
                             {b}
                           </span>
@@ -167,20 +168,24 @@ export function PopupBubble({
                     ) : null}
                   </div>
                   {item.description ? (
-                    <div className="mt-1 line-clamp-2 text-xs text-[var(--text-muted)]">
+                    <div className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground/80">
                       {item.description}
                     </div>
                   ) : null}
                 </div>
-                <div className="pt-0.5 text-sm text-[var(--text-muted)]">
-                  {item.checked ? "✓" : ""}
+                <div className="flex items-center justify-center w-4 h-4 text-primary">
+                  {item.checked ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                  ) : ""}
                 </div>
               </button>
             </div>
           ))}
         </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 }

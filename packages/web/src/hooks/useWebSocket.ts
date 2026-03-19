@@ -20,7 +20,7 @@ function handleMessage(msg: WSMessage): void {
     case "ai_complete":
       console.info(`[ws] ai_complete ${msg.cascadeId} ${msg.title}`);
       useUIStore.getState().addToast({
-        message: `✨ AI completed: ${msg.title || "Task finished"}`,
+        message: `AI completed: ${msg.title || "Task finished"}`,
         type: "success",
         duration: 6000
       });
@@ -31,7 +31,7 @@ function handleMessage(msg: WSMessage): void {
       return;
     case "auto_action": {
       const label =
-        msg.action === "accept_all" ? "✅ Auto Accept All" : "🔄 Auto Retry";
+        msg.action === "accept_all" ? "Auto Accept All" : "Auto Retry";
       console.info(`[ws] auto_action ${msg.action} on ${msg.cascadeId}`);
       useUIStore.getState().addToast({
         message: `${label}: ${msg.title || ""}`,
