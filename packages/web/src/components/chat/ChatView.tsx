@@ -5,19 +5,41 @@ import { useUIStore } from "../../stores/uiStore";
 import { apiUrl } from "../../services/api";
 import { ChatViewport } from "./ChatViewport";
 import { MessageInput } from "./MessageInput";
+import { FileChangesBar } from "./FileChangesBar";
+import type { FileChange } from "./FileChangesBar";
+import { ToolbarButtonsBar } from "./ToolbarButtonsBar";
+import type { ToolbarButton } from "./ToolbarButtonsBar";
+import { PopupBubble } from "./PopupBubble";
+import type { PopupItem } from "./PopupBubble";
+
+type ToolbarPopup = {
+  open: boolean;
+  items: PopupItem[];
+  triggerIndex: number | null;
+  anchor: { x: number; y: number } | null;
+};
 
 export function ChatView() {
   const cascades = useCascadeStore((s) => s.cascades);
   const currentId = useCascadeStore((s) => s.currentId);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [launching, setLaunching] = useState(false);
+  const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
+  const [toolbarButtons, setToolbarButtons] = useState<ToolbarButton[]>([]);
+  const [actionButtons, setActionButtons] = useState<ToolbarButton[]>([]);
+  const [toolbarPopup, setToolbarPopup] = useState<ToolbarPopup>({
+    open: false, items: [], triggerIndex: null, anchor: null,
+  });
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottomIfNeeded = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 150) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
   }, []);
 
   const launch = useCallback(async () => {
@@ -36,6 +58,53 @@ export function ChatView() {
       setLaunching(false);
     }
   }, [launching]);
+
+  // Called by ToolbarButtonsBar when a popup trigger is clicked and returns items
+  const handleToolbarPopup = useCallback(
+    (items: { title: string; selector?: string }[], triggerIndex: number, x: number, y: number) => {
+      setToolbarPopup({
+        open: true,
+        items: items.map((it) => ({ title: it.title, selector: it.selector })),
+        triggerIndex,
+        anchor: { x, y },
+      });
+    },
+    []
+  );
+
+  const handleToolbarPopupSelect = useCallback(
+    async (item: PopupItem) => {
+      const id = currentId;
+      const triggerIndex = toolbarPopup.triggerIndex;
+      if (!id || triggerIndex === null) return;
+      setToolbarPopup({ open: false, items: [], triggerIndex: null, anchor: null });
+      try {
+        await fetch(apiUrl(`/popup-click/${encodeURIComponent(id)}`), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: item.title, selector: item.selector || null, triggerIndex }),
+        });
+      } catch {
+        // ignore
+      }
+    },
+    [currentId, toolbarPopup.triggerIndex]
+  );
+
+  const handleToolbarPopupClose = useCallback(async () => {
+    const id = currentId;
+    setToolbarPopup({ open: false, items: [], triggerIndex: null, anchor: null });
+    if (!id) return;
+    try {
+      await fetch(apiUrl(`/dismiss/${encodeURIComponent(id)}`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // ignore
+    }
+  }, [currentId]);
 
   // Empty state
   if (cascades.length === 0) {
@@ -91,10 +160,19 @@ export function ChatView() {
     <div className="flex-1 flex flex-col overflow-hidden relative">
       <div ref={scrollRef} className="flex-1 overflow-y-auto w-full">
         <div className="max-w-4xl mx-auto min-h-full px-4 sm:px-6">
-          <ChatViewport cascadeId={currentId} onContentUpdate={scrollToBottom} />
+          <ChatViewport cascadeId={currentId} onContentUpdate={scrollToBottomIfNeeded} onFileChanges={setFileChanges} onToolbarButtons={setToolbarButtons} onActionButtons={setActionButtons} />
         </div>
       </div>
+      <FileChangesBar cascadeId={currentId} files={fileChanges} actions={actionButtons} />
+      <ToolbarButtonsBar cascadeId={currentId} buttons={toolbarButtons} onPopup={handleToolbarPopup} />
       <MessageInput cascadeId={currentId} />
+      <PopupBubble
+        open={toolbarPopup.open}
+        items={toolbarPopup.items}
+        anchor={toolbarPopup.anchor}
+        onSelect={handleToolbarPopupSelect}
+        onClose={() => void handleToolbarPopupClose()}
+      />
     </div>
   );
 }

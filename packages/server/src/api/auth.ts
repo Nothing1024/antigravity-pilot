@@ -30,18 +30,23 @@ export const authMiddleware: RequestHandler = (req, res, next) => {
   const cookies = parseCookies(req.headers.cookie);
   if (verifyToken(cookies.auth)) return next();
 
-  if (
-    req.path.startsWith("/api/") ||
-    req.path.startsWith("/cascades") ||
-    req.path.startsWith("/snapshot") ||
-    req.path.startsWith("/styles") ||
-    req.path.startsWith("/send") ||
-    req.path.startsWith("/click") ||
-    req.path.startsWith("/new-conversation")
-  ) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+  // Allow static frontend assets through so the login page can render
+  const isStaticAsset =
+    req.method === "GET" &&
+    (req.path === "/" ||
+     req.path.endsWith(".html") ||
+     req.path.endsWith(".js") ||
+     req.path.endsWith(".css") ||
+     req.path.endsWith(".svg") ||
+     req.path.endsWith(".png") ||
+     req.path.endsWith(".ico") ||
+     req.path.endsWith(".woff") ||
+     req.path.endsWith(".woff2") ||
+     req.path.endsWith(".webmanifest") ||
+     req.path.endsWith(".json") ||
+     req.path.startsWith("/assets/"));
+
+  if (isStaticAsset) return next();
 
   res.status(401).json({ error: "Unauthorized" });
 };

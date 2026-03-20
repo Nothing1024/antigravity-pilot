@@ -29,7 +29,7 @@ export function CascadeList({ onSelect }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-px">
+    <div className="flex flex-col gap-1">
       {cascades.map((c) => {
         const active = c.id === currentId;
         return (
@@ -37,18 +37,18 @@ export function CascadeList({ onSelect }: Props) {
             key={c.id}
             type="button"
             className={[
-              "w-full rounded-lg px-3 py-2 text-left transition-all duration-150",
+              "flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition-colors duration-200",
               active
-                ? "bg-accent text-accent-foreground border-l-2 border-primary"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground border-l-2 border-transparent"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             ].join(" ")}
             onClick={() => onPick(c.id)}
           >
-            <div className={["truncate text-[13px] leading-tight", active ? "font-medium" : ""].join(" ")}>
+            <div className={["truncate text-[13px] leading-tight", active ? "font-semibold" : "font-medium"].join(" ")}>
               {c.title || "Untitled Session"}
             </div>
             {c.window && (
-              <div className="mt-0.5 truncate text-[11px] opacity-50">
+              <div className={["truncate text-[11px]", active ? "text-primary/70" : "text-muted-foreground/50"].join(" ")}>
                 {c.window}
               </div>
             )}

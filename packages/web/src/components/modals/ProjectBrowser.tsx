@@ -115,7 +115,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[var(--z-modal)] bg-[var(--bg-overlay)]"
+      className="fixed inset-0 z-[var(--z-modal)] bg-black/40 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -123,28 +123,31 @@ export function ProjectBrowser({ open, onClose }: Props) {
       <div
         className={[
           "fixed left-1/2 top-1/2 h-[min(80dvh,720px)] w-[min(720px,calc(100vw-32px))]",
-          "-translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-lg)]",
-          "border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-[var(--shadow-lg)]"
+          "-translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl",
+          "border border-border/40 bg-background text-foreground shadow-2xl",
+          "flex flex-col"
         ].join(" ")}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[var(--border-light)] px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-border/20 px-4 py-3">
           <div className="min-w-0 flex-1 truncate text-sm font-semibold">Open Project</div>
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-sm active:bg-[var(--bg-secondary)]"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted/50 transition-colors"
             onClick={onClose}
           >
-            ✕
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
           </button>
         </div>
 
-        <div className="border-b border-[var(--border-light)] px-4 py-2 text-xs text-[var(--text-muted)]">
+        <div className="border-b border-border/20 px-4 py-2 text-xs text-muted-foreground">
           {breadcrumb.length ? (
             <div className="flex flex-wrap gap-x-1 gap-y-1">
               <button
                 type="button"
-                className="rounded px-1 active:bg-[var(--bg-secondary)]"
+                className="rounded px-1 hover:bg-muted/50 transition-colors"
                 onClick={() => load("/")}
               >
                 /
@@ -153,7 +156,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
                 <button
                   key={c.path}
                   type="button"
-                  className="rounded px-1 active:bg-[var(--bg-secondary)]"
+                  className="rounded px-1 hover:bg-muted/50 transition-colors"
                   onClick={() => load(c.path)}
                 >
                   {c.name}
@@ -165,17 +168,17 @@ export function ProjectBrowser({ open, onClose }: Props) {
           )}
         </div>
 
-        <div className="h-[calc(100%-120px)] overflow-auto px-2 py-2">
+        <div className="flex-1 min-h-0 overflow-auto px-2 py-2">
           {loading ? (
-            <div className="px-2 py-4 text-sm text-[var(--text-muted)]">Loading…</div>
+            <div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
           ) : error ? (
-            <div className="px-2 py-4 text-sm text-[var(--danger)]">{error}</div>
+            <div className="px-2 py-4 text-sm text-destructive">{error}</div>
           ) : (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-0.5">
               {parent ? (
                 <button
                   type="button"
-                  className="rounded-md px-3 py-2 text-left text-sm active:bg-[var(--bg-secondary)]"
+                  className="rounded-md px-3 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
                   onClick={() => load(parent)}
                 >
                   ..
@@ -185,30 +188,30 @@ export function ProjectBrowser({ open, onClose }: Props) {
                 <button
                   key={it.path}
                   type="button"
-                  className="rounded-md px-3 py-2 text-left text-sm active:bg-[var(--bg-secondary)]"
+                  className="rounded-md px-3 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
                   onClick={() => load(it.path)}
                 >
                   {it.name}
                 </button>
               ))}
               {!parent && items.length === 0 ? (
-                <div className="px-2 py-4 text-sm text-[var(--text-muted)]">No folders</div>
+                <div className="px-2 py-4 text-sm text-muted-foreground">No folders</div>
               ) : null}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-[var(--border-light)] px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border/20 px-4 py-3">
           <button
             type="button"
-            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm active:bg-[var(--bg-secondary)]"
+            className="rounded-md border border-border/40 px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors"
             onClick={onClose}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-md border border-[var(--border)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--text-inverse)] active:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             onClick={() => void openProject()}
             disabled={!path || loading}
           >

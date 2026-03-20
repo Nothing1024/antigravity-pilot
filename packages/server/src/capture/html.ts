@@ -32,10 +32,15 @@ export async function captureHTML(cdp: CDPConnection): Promise<Snapshot | null> 
         }
 
         // Support both legacy #cascade and new iframe-based #conversation/#chat
-        const target = document.getElementById('cascade') 
+        const chatEl = document.getElementById('cascade') 
             || document.getElementById('conversation') 
             || document.getElementById('chat');
-        if (!target) return { error: 'chat container not found' };
+        if (!chatEl) return { error: 'chat container not found' };
+        
+        // Capture the parent container to include the model-selection toolbar above the chat
+        const target = (chatEl.parentElement && chatEl.parentElement !== document.body && chatEl.parentElement !== document.documentElement)
+            ? chatEl.parentElement
+            : chatEl;
         
         // Annotate clickable elements for click passthrough
         const clickSelector = 'button, a, [role="button"], [class*="cursor-pointer"], [role="menuitem"], [role="option"], [role="tab"], [role="combobox"], [aria-haspopup], [class*="backdrop"], [class*="overlay"]';
@@ -72,11 +77,10 @@ export async function captureHTML(cdp: CDPConnection): Promise<Snapshot | null> 
             }
         });
 
-        // Remove input box to keep snapshot clean
+        // Remove only the contenteditable editor — keep Planning/Model toolbar buttons
         const editor = clone.querySelector('[contenteditable="true"]');
         if (editor) {
-            const editorContainer = editor.closest('div[class*="relative"]') || editor.parentElement;
-            if (editorContainer && editorContainer !== clone) editorContainer.remove();
+            editor.remove();
         }
 
         // Move dialog overlays (e.g. Confirm Undo) to end of DOM tree.

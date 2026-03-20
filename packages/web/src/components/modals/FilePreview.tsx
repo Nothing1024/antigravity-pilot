@@ -32,7 +32,7 @@ type Props = {
 
 function Header({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--border-light)] px-4 py-3">
+    <div className="flex items-center gap-2 border-b border-border/20 px-4 py-3">
       <div className="min-w-0 flex-1 truncate text-sm font-semibold">
         {children}
       </div>
@@ -79,7 +79,7 @@ export function FilePreview({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[var(--z-modal)] bg-[var(--bg-overlay)]"
+      className="fixed inset-0 z-[var(--z-modal)] bg-black/40 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -87,20 +87,20 @@ export function FilePreview({
       <div
         className={[
           "fixed left-1/2 top-1/2 h-[min(80dvh,760px)] w-[min(900px,calc(100vw-32px))]",
-          "-translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-lg)]",
-          "border border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-[var(--shadow-lg)]"
+          "-translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl",
+          "border border-border/40 bg-background text-foreground shadow-2xl"
         ].join(" ")}
         onClick={(e) => e.stopPropagation()}
       >
         <Header>{title || "File preview"}</Header>
 
-        <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-[var(--text-muted)]">
+        <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-muted-foreground">
           <div className="min-w-0 flex-1 truncate">
             {payload?.type === "file" ? payload.path : ""}
           </div>
           <button
             type="button"
-            className="rounded-md px-2 py-1 active:bg-[var(--bg-secondary)]"
+            className="rounded-md px-2 py-1 hover:bg-muted/50 transition-colors"
             onClick={onClose}
           >
             Close
@@ -109,12 +109,12 @@ export function FilePreview({
 
         <div
           ref={bodyRef}
-          className="h-[calc(100%-96px)] overflow-auto px-4 pb-6 text-sm leading-[var(--leading-normal)]"
+          className="h-[calc(100%-96px)] overflow-auto px-4 pb-6 text-sm leading-relaxed"
         >
           {loading ? (
-            <div className="py-6 text-[var(--text-muted)]">Loading…</div>
+            <div className="py-6 text-muted-foreground">Loading…</div>
           ) : error ? (
-            <div className="py-6 text-[var(--danger)]">{error}</div>
+            <div className="py-6 text-destructive">{error}</div>
           ) : (
             <div dangerouslySetInnerHTML={{ __html: html }} />
           )}
