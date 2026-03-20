@@ -4,7 +4,7 @@ import { apiUrl } from "../services/api";
 
 export type ThemeMode = "light" | "dark" | "follow";
 export type SendMode = "enter" | "ctrl+enter";
-export type Locale = "en" | "zh-CN";
+export type Locale = "en" | "zh-CN" | "zh-TW";
 
 export type AutoActionState = {
   autoAcceptAll: boolean;
@@ -33,10 +33,11 @@ function normalizeSendMode(raw: string | null): SendMode {
 }
 
 function detectLocale(raw: string | null): Locale {
-  if (raw === "en" || raw === "zh-CN") return raw;
+  if (raw === "en" || raw === "zh-CN" || raw === "zh-TW") return raw;
   // Auto-detect from browser language
   try {
     const lang = navigator.language || "";
+    if (lang === "zh-TW" || lang === "zh-Hant" || lang.startsWith("zh-Hant")) return "zh-TW";
     if (lang.startsWith("zh")) return "zh-CN";
   } catch { /* ignore */ }
   return "en";

@@ -1,21 +1,24 @@
 import en from "./locales/en";
 import type { LocaleKeys } from "./locales/en";
 import zhCN from "./locales/zh-CN";
+import zhTW from "./locales/zh-TW";
 import { useUIStore } from "../stores/uiStore";
 
-export type Locale = "en" | "zh-CN";
+export type Locale = "en" | "zh-CN" | "zh-TW";
 
 const messages: Record<Locale, Record<string, string>> = {
   en,
   "zh-CN": zhCN,
+  "zh-TW": zhTW,
 };
 
 export const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",
   "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
 };
 
-export const ALL_LOCALES: Locale[] = ["en", "zh-CN"];
+export const ALL_LOCALES: Locale[] = ["en", "zh-CN", "zh-TW"];
 
 /**
  * Translation function — returns the translated string for the current locale.
