@@ -37,7 +37,9 @@ cp config.example.json config.json
 pnpm dev
 ```
 
-在浏览器中打开 `http://<你的IP>:3563`。
+在浏览器中打开 `http://<你的IP>:5173`（开发模式）。
+
+生产环境：`pnpm build && pnpm start`，然后访问 `http://<你的IP>:3563`。
 
 ### 启动 Antigravity IDE (macOS)
 

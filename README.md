@@ -37,7 +37,9 @@ cp config.example.json config.json
 pnpm dev
 ```
 
-Open `http://<your-ip>:3563` in any browser.
+Open `http://<your-ip>:5173` in any browser (dev mode).
+
+For production: `pnpm build && pnpm start`, then access `http://<your-ip>:3563`.
 
 ### Launch Antigravity IDE (macOS)
 

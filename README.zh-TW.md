@@ -37,7 +37,9 @@ cp config.example.json config.json
 pnpm dev
 ```
 
-在瀏覽器中開啟 `http://<你的IP>:3563`。
+在瀏覽器中開啟 `http://<你的IP>:5173`（開發模式）。
+
+正式環境：`pnpm build && pnpm start`，然後存取 `http://<你的IP>:3563`。
 
 ### 啟動 Antigravity IDE (macOS)
 
