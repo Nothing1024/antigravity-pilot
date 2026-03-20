@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
+import { useI18n } from "../../i18n";
+
 import { marked } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
@@ -57,6 +59,7 @@ export function FilePreview({
   error = null,
   onClose
 }: Props) {
+  const t = useI18n();
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const title = payload?.type === "artifact" ? payload.name : payload?.filename;
@@ -92,7 +95,7 @@ export function FilePreview({
         ].join(" ")}
         onClick={(e) => e.stopPropagation()}
       >
-        <Header>{title || "File preview"}</Header>
+        <Header>{title || t("filePreview.title")}</Header>
 
         <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-muted-foreground">
           <div className="min-w-0 flex-1 truncate">
@@ -103,7 +106,7 @@ export function FilePreview({
             className="rounded-md px-2 py-1 hover:bg-muted/50 transition-colors"
             onClick={onClose}
           >
-            Close
+            {t("close")}
           </button>
         </div>
 
@@ -112,7 +115,7 @@ export function FilePreview({
           className="h-[calc(100%-96px)] overflow-auto px-4 pb-6 text-sm leading-relaxed"
         >
           {loading ? (
-            <div className="py-6 text-muted-foreground">Loading…</div>
+            <div className="py-6 text-muted-foreground">{t("loading")}</div>
           ) : error ? (
             <div className="py-6 text-destructive">{error}</div>
           ) : (

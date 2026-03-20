@@ -1,69 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useTheme } from "../../hooks/useTheme";
-import type { ThemeMode } from "../../hooks/useTheme";
+import { useI18n, ALL_LOCALES, LOCALE_LABELS } from "../../i18n";
 import { apiUrl } from "../../services/api";
+import { useUIStore } from "../../stores/uiStore";
 
 type Props = {
   visible: boolean;
 };
 
-const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "follow", label: "System" }
-];
-
-type AutoActionState = {
-  autoAcceptAll: boolean;
-  autoRetry: boolean;
-  retryBackoff: boolean;
-};
-
 export function SettingsView({ visible }: Props) {
+  const t = useI18n();
   const { themeMode, setThemeMode } = useTheme();
+  const sendMode = useUIStore((s) => s.sendMode);
+  const setSendMode = useUIStore((s) => s.setSendMode);
+  const locale = useUIStore((s) => s.locale);
+  const setLocale = useUIStore((s) => s.setLocale);
+  const autoActions = useUIStore((s) => s.autoActions);
+  const setAutoAction = useUIStore((s) => s.setAutoAction);
+  const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
 
-  // Auto-action settings
-  const [autoActions, setAutoActions] = useState<AutoActionState>({
-    autoAcceptAll: false,
-    autoRetry: false,
-    retryBackoff: true
-  });
-
-  // Fetch auto-action settings from server on mount
+  // Push localStorage state to server on mount (recovers server state after restart)
   useEffect(() => {
-    fetch(apiUrl("/api/auto-actions"), { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && typeof data.autoAcceptAll === "boolean") {
-          setAutoActions(data);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const toggleAutoAction = useCallback(
-    async (key: keyof AutoActionState) => {
-      const updated = { ...autoActions, [key]: !autoActions[key] };
-      setAutoActions(updated);
-      try {
-        await fetch(apiUrl("/api/auto-actions"), {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(updated)
-        });
-      } catch (err) {
-        console.error("Auto-action toggle error:", err);
-        // revert on failure
-        setAutoActions(autoActions);
-      }
-    },
-    [autoActions]
-  );
+    pushAutoActionsToServer();
+  }, [pushAutoActionsToServer]);
 
   useEffect(() => {
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -118,17 +81,28 @@ export function SettingsView({ visible }: Props) {
 
   if (!visible) return null;
 
+  const themeOptions: { value: "light" | "dark" | "follow"; labelKey: "settings.theme.light" | "settings.theme.dark" | "settings.theme.system" }[] = [
+    { value: "light", labelKey: "settings.theme.light" },
+    { value: "dark", labelKey: "settings.theme.dark" },
+    { value: "follow", labelKey: "settings.theme.system" },
+  ];
+
+  const sendOptions: { value: "enter" | "ctrl+enter"; labelKey: "settings.sendMode.enter" | "settings.sendMode.ctrlEnter"; descKey: "settings.sendMode.enter.desc" | "settings.sendMode.ctrlEnter.desc" }[] = [
+    { value: "enter", labelKey: "settings.sendMode.enter", descKey: "settings.sendMode.enter.desc" },
+    { value: "ctrl+enter", labelKey: "settings.sendMode.ctrlEnter", descKey: "settings.sendMode.ctrlEnter.desc" },
+  ];
+
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto w-full max-w-lg space-y-6">
         {/* Theme */}
         <div className="rounded-lg border border-border bg-card shadow-sm">
           <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium">Appearance</h2>
-            <p className="text-xs text-muted-foreground">Choose your preferred theme.</p>
+            <h2 className="text-sm font-medium">{t("settings.appearance")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.appearance.desc")}</p>
           </div>
           <div className="flex gap-2 p-4">
-            {THEME_OPTIONS.map((opt) => {
+            {themeOptions.map((opt) => {
               const active = themeMode === opt.value;
               return (
                 <button
@@ -151,7 +125,68 @@ export function SettingsView({ visible }: Props) {
                   {opt.value === "follow" && (
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                   )}
-                  {opt.label}
+                  {t(opt.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Language */}
+        <div className="rounded-lg border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium">{t("settings.language")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.language.desc")}</p>
+          </div>
+          <div className="flex gap-2 p-4">
+            {ALL_LOCALES.map((loc) => {
+              const active = locale === loc;
+              return (
+                <button
+                  key={loc}
+                  type="button"
+                  className={[
+                    "flex-1 inline-flex flex-col items-center gap-1 rounded-md border p-3 text-xs font-medium transition-colors",
+                    active
+                      ? "border-ring bg-accent text-accent-foreground"
+                      : "border-transparent hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                  ].join(" ")}
+                  onClick={() => setLocale(loc)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  {LOCALE_LABELS[loc]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Send Mode */}
+        <div className="rounded-lg border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium">{t("settings.sendMode")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.sendMode.desc")}</p>
+          </div>
+          <div className="flex gap-2 p-4">
+            {sendOptions.map((opt) => {
+              const active = sendMode === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={[
+                    "flex-1 inline-flex flex-col items-center gap-1 rounded-md border p-3 text-xs font-medium transition-colors",
+                    active
+                      ? "border-ring bg-accent text-accent-foreground"
+                      : "border-transparent hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                  ].join(" ")}
+                  onClick={() => setSendMode(opt.value)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                  </svg>
+                  <span>{t(opt.labelKey)}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">{t(opt.descKey)}</span>
                 </button>
               );
             })}
@@ -161,17 +196,15 @@ export function SettingsView({ visible }: Props) {
         {/* Automation */}
         <div className="rounded-lg border border-border bg-card shadow-sm">
           <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium">Automation</h2>
-            <p className="text-xs text-muted-foreground">Automatic actions to reduce manual intervention.</p>
+            <h2 className="text-sm font-medium">{t("settings.automation")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.automation.desc")}</p>
           </div>
           <div className="divide-y divide-border">
             {/* Auto Accept All */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="space-y-0.5 pr-4">
-                <div className="text-sm font-medium">Auto Accept All</div>
-                <div className="text-xs text-muted-foreground">
-                  Automatically click "Accept all" when it appears in the chat.
-                </div>
+                <div className="text-sm font-medium">{t("settings.autoAccept")}</div>
+                <div className="text-xs text-muted-foreground">{t("settings.autoAccept.desc")}</div>
               </div>
               <button
                 type="button"
@@ -181,23 +214,16 @@ export function SettingsView({ visible }: Props) {
                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   autoActions.autoAcceptAll ? "bg-primary" : "bg-input"
                 ].join(" ")}
-                onClick={() => void toggleAutoAction("autoAcceptAll")}
+                onClick={() => setAutoAction("autoAcceptAll", !autoActions.autoAcceptAll)}
               >
-                <span
-                  className={[
-                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                    autoActions.autoAcceptAll ? "translate-x-4" : "translate-x-0"
-                  ].join(" ")}
-                />
+                <span className={["pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", autoActions.autoAcceptAll ? "translate-x-4" : "translate-x-0"].join(" ")} />
               </button>
             </div>
             {/* Auto Retry */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="space-y-0.5 pr-4">
-                <div className="text-sm font-medium">Auto Retry on Error</div>
-                <div className="text-xs text-muted-foreground">
-                  Automatically click "Retry" when "Agent terminated due to error" appears.
-                </div>
+                <div className="text-sm font-medium">{t("settings.autoRetry")}</div>
+                <div className="text-xs text-muted-foreground">{t("settings.autoRetry.desc")}</div>
               </div>
               <button
                 type="button"
@@ -207,24 +233,17 @@ export function SettingsView({ visible }: Props) {
                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   autoActions.autoRetry ? "bg-primary" : "bg-input"
                 ].join(" ")}
-                onClick={() => void toggleAutoAction("autoRetry")}
+                onClick={() => setAutoAction("autoRetry", !autoActions.autoRetry)}
               >
-                <span
-                  className={[
-                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                    autoActions.autoRetry ? "translate-x-4" : "translate-x-0"
-                  ].join(" ")}
-                />
+                <span className={["pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", autoActions.autoRetry ? "translate-x-4" : "translate-x-0"].join(" ")} />
               </button>
             </div>
-            {/* Retry Backoff (sub-option, only visible when autoRetry is on) */}
+            {/* Retry Backoff */}
             {autoActions.autoRetry && (
               <div className="flex items-center justify-between px-4 py-3 pl-8 bg-muted/20">
                 <div className="space-y-0.5 pr-4">
-                  <div className="text-sm font-medium">Exponential Backoff</div>
-                  <div className="text-xs text-muted-foreground">
-                    Increase delay between retries (10s → 30s → 60s → 120s).
-                  </div>
+                  <div className="text-sm font-medium">{t("settings.backoff")}</div>
+                  <div className="text-xs text-muted-foreground">{t("settings.backoff.desc")}</div>
                 </div>
                 <button
                   type="button"
@@ -234,14 +253,9 @@ export function SettingsView({ visible }: Props) {
                     "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     autoActions.retryBackoff ? "bg-primary" : "bg-input"
                   ].join(" ")}
-                  onClick={() => void toggleAutoAction("retryBackoff")}
+                  onClick={() => setAutoAction("retryBackoff", !autoActions.retryBackoff)}
                 >
-                  <span
-                    className={[
-                      "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                      autoActions.retryBackoff ? "translate-x-4" : "translate-x-0"
-                    ].join(" ")}
-                  />
+                  <span className={["pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", autoActions.retryBackoff ? "translate-x-4" : "translate-x-0"].join(" ")} />
                 </button>
               </div>
             )}
@@ -251,16 +265,16 @@ export function SettingsView({ visible }: Props) {
         {/* Notifications */}
         <div className="rounded-lg border border-border bg-card shadow-sm">
           <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium">Notifications</h2>
-            <p className="text-xs text-muted-foreground">Get notified when AI tasks complete.</p>
+            <h2 className="text-sm font-medium">{t("settings.notifications")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.notifications.desc")}</p>
           </div>
           <div className="p-4">
             {pushSupported ? (
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-sm font-medium">Push Notifications</div>
+                  <div className="text-sm font-medium">{t("settings.push")}</div>
                   <div className="text-xs text-muted-foreground">
-                    {pushEnabled ? "Notifications are enabled" : "Notifications are disabled"}
+                    {pushEnabled ? t("settings.push.enabled") : t("settings.push.disabled")}
                   </div>
                 </div>
                 <button
@@ -274,16 +288,11 @@ export function SettingsView({ visible }: Props) {
                   onClick={() => void togglePush()}
                   disabled={pushLoading}
                 >
-                  <span
-                    className={[
-                      "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                      pushEnabled ? "translate-x-4" : "translate-x-0"
-                    ].join(" ")}
-                  />
+                  <span className={["pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", pushEnabled ? "translate-x-4" : "translate-x-0"].join(" ")} />
                 </button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Push notifications are not supported in this browser.</p>
+              <p className="text-sm text-muted-foreground">{t("settings.push.unsupported")}</p>
             )}
           </div>
         </div>
@@ -291,15 +300,15 @@ export function SettingsView({ visible }: Props) {
         {/* System Info */}
         <div className="rounded-lg border border-border bg-card shadow-sm">
           <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium">About</h2>
+            <h2 className="text-sm font-medium">{t("settings.about")}</h2>
           </div>
           <div className="divide-y divide-border text-sm">
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-muted-foreground">Version</span>
+              <span className="text-muted-foreground">{t("settings.version")}</span>
               <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">3.0.0</code>
             </div>
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-muted-foreground">Stack</span>
+              <span className="text-muted-foreground">{t("settings.stack")}</span>
               <span className="text-xs font-medium">Node + React</span>
             </div>
           </div>

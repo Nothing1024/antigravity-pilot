@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useI18n } from "../../i18n";
 import { apiUrl } from "../../services/api";
 
 type BrowseItem = { name: string; path: string };
@@ -57,6 +58,7 @@ function crumbs(p: string): Array<{ name: string; path: string }> {
 }
 
 export function ProjectBrowser({ open, onClose }: Props) {
+  const t = useI18n();
   const [path, setPath] = useState<string | null>(null);
   const [parent, setParent] = useState<string | null>(null);
   const [items, setItems] = useState<BrowseItem[]>([]);
@@ -130,7 +132,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-border/20 px-4 py-3">
-          <div className="min-w-0 flex-1 truncate text-sm font-semibold">Open Project</div>
+          <div className="min-w-0 flex-1 truncate text-sm font-semibold">{t("project.title")}</div>
           <button
             type="button"
             className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted/50 transition-colors"
@@ -164,13 +166,13 @@ export function ProjectBrowser({ open, onClose }: Props) {
               ))}
             </div>
           ) : (
-            <div>Loading…</div>
+            <div>{t("loading")}</div>
           )}
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto px-2 py-2">
           {loading ? (
-            <div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
+            <div className="px-2 py-4 text-sm text-muted-foreground">{t("loading")}</div>
           ) : error ? (
             <div className="px-2 py-4 text-sm text-destructive">{error}</div>
           ) : (
@@ -195,7 +197,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
                 </button>
               ))}
               {!parent && items.length === 0 ? (
-                <div className="px-2 py-4 text-sm text-muted-foreground">No folders</div>
+                <div className="px-2 py-4 text-sm text-muted-foreground">{t("project.noFolders")}</div>
               ) : null}
             </div>
           )}
@@ -207,7 +209,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
             className="rounded-md border border-border/40 px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors"
             onClick={onClose}
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             type="button"
@@ -215,7 +217,7 @@ export function ProjectBrowser({ open, onClose }: Props) {
             onClick={() => void openProject()}
             disabled={!path || loading}
           >
-            Open
+            {t("open")}
           </button>
         </div>
       </div>

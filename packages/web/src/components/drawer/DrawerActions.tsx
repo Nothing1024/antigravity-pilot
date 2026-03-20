@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { useI18n } from "../../i18n";
 import { apiUrl } from "../../services/api";
 import { useCascadeStore } from "../../stores/cascadeStore";
 
@@ -15,6 +16,7 @@ async function post(pathname: string): Promise<void> {
 }
 
 export function DrawerActions({ onOpenProject, onDone }: Props) {
+  const t = useI18n();
   const currentId = useCascadeStore((s) => s.currentId);
 
   const newConversation = useCallback(async () => {
@@ -45,7 +47,7 @@ export function DrawerActions({ onOpenProject, onDone }: Props) {
         disabled={!currentId}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-80 group-hover:opacity-100 transition-opacity"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        New Conversation
+        {t("drawer.newConversation")}
       </button>
       
       <button
@@ -57,7 +59,7 @@ export function DrawerActions({ onOpenProject, onDone }: Props) {
         }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-80 group-hover:opacity-100 transition-opacity"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" /></svg>
-        Open Project
+        {t("drawer.openProject")}
       </button>
 
       <button
@@ -66,7 +68,7 @@ export function DrawerActions({ onOpenProject, onDone }: Props) {
         onClick={() => void killAll()}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-80 group-hover:opacity-100 transition-opacity"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-        Terminate All
+        {t("drawer.terminateAll")}
       </button>
     </div>
   );

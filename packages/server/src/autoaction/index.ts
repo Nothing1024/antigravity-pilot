@@ -90,55 +90,79 @@ export async function checkAndExecuteAutoActions(
 
   if (actions.length === 0) return;
 
-  // Build and execute a single CDP script that detects + clicks
-  const script = buildAutoActionScript(actions);
+  // Find the target button and get its bounding rect via Runtime.evaluate
+  const findScript = buildFindButtonScript(actions);
 
   try {
     const result: any = await cdp.call("Runtime.evaluate", {
-      expression: script,
+      expression: findScript,
       returnByValue: true,
       contextId: cdp.rootContextId
     });
 
     const val = result.result?.value;
-    if (val?.clicked) {
-      setCooldown(cascadeId, val.clicked);
+    if (!val?.action || !val?.rect) return;
 
-      if (val.clicked === "auto_retry") {
-        const count = incrementRetryCounter(cascadeId);
-        const nextDelay = RETRY_DELAYS[Math.min(count, RETRY_DELAYS.length - 1)];
-        console.log(
-          `🤖 🔄 Auto Retry #${count} on "${chatTitle}" — next retry in ${nextDelay / 1000}s`
-        );
-      } else {
-        console.log(
-          `🤖 🟢 Auto Accept All on "${chatTitle}" (text: "${val.text}")`
-        );
-      }
+    // Use CDP Input.dispatchMouseEvent for a real browser-level click
+    // This is the same mechanism used by the manual /click API endpoint
+    const x = Math.round(val.rect.x + val.rect.width / 2);
+    const y = Math.round(val.rect.y + val.rect.height / 2);
 
-      broadcast({
-        type: "auto_action",
-        cascadeId,
-        action: val.clicked,
-        title: chatTitle
-      });
+    await cdp.call("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x, y
+    });
+    await cdp.call("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x, y,
+      button: "left",
+      clickCount: 1
+    });
+    await cdp.call("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x, y,
+      button: "left",
+      clickCount: 1
+    });
+
+    setCooldown(cascadeId, val.action);
+
+    if (val.action === "auto_retry") {
+      const count = incrementRetryCounter(cascadeId);
+      const nextDelay = RETRY_DELAYS[Math.min(count, RETRY_DELAYS.length - 1)];
+      console.log(
+        `🤖 🔄 Auto Retry #${count} on "${chatTitle}" — next retry in ${nextDelay / 1000}s`
+      );
+    } else {
+      console.log(
+        `🤖 🟢 Auto Accept All on "${chatTitle}" (text: "${val.text}")`
+      );
     }
+
+    broadcast({
+      type: "auto_action",
+      cascadeId,
+      action: val.action,
+      title: chatTitle
+    });
   } catch {
     // CDP call failed — silently ignore
   }
 }
 
 // ── CDP script builder ──
-// Runs inside Electron; finds the matching element and dispatches a full
-// pointer+mouse event sequence for React/Electron compatibility.
-function buildAutoActionScript(actions: string[]): string {
+// Runs inside Electron; finds the matching button and returns its
+// bounding rect so that we can click it via Input.dispatchMouseEvent.
+// This is more reliable than JS-level event dispatch because CDP mouse
+// events are processed by the browser's input pipeline, not by JS.
+function buildFindButtonScript(actions: string[]): string {
   const checks: string[] = [];
 
   if (actions.includes("accept_all")) {
     checks.push(`
       if (text === 'Accept all' || text === 'Accept All') {
-        doClick(el);
-        return { clicked: 'accept_all', text };
+        const rect = el.getBoundingClientRect();
+        return { action: 'accept_all', text, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
       }
     `);
   }
@@ -152,8 +176,8 @@ function buildAutoActionScript(actions: string[]): string {
         if (container) {
           const ct = container.textContent || '';
           if (ct.includes('terminated') || ct.includes('Agent terminated due to error')) {
-            doClick(el);
-            return { clicked: 'auto_retry', text };
+            const rect = el.getBoundingClientRect();
+            return { action: 'auto_retry', text, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
           }
         }
       }
@@ -164,27 +188,7 @@ function buildAutoActionScript(actions: string[]): string {
     const target = document.getElementById('cascade')
       || document.getElementById('conversation')
       || document.getElementById('chat');
-    if (!target) return { clicked: null };
-
-    function doClick(el) {
-      const rect = el.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const eventInit = { bubbles: true, cancelable: true, clientX: x, clientY: y, screenX: x, screenY: y, view: window };
-      const pointerInit = { ...eventInit, pointerId: 1, pointerType: 'mouse', isPrimary: true };
-      el.dispatchEvent(new PointerEvent('pointerover', pointerInit));
-      el.dispatchEvent(new MouseEvent('mouseover', eventInit));
-      el.dispatchEvent(new PointerEvent('pointerenter', { ...pointerInit, bubbles: false }));
-      el.dispatchEvent(new MouseEvent('mouseenter', { ...eventInit, bubbles: false }));
-      el.dispatchEvent(new PointerEvent('pointermove', pointerInit));
-      el.dispatchEvent(new MouseEvent('mousemove', eventInit));
-      el.dispatchEvent(new PointerEvent('pointerdown', pointerInit));
-      el.dispatchEvent(new MouseEvent('mousedown', { ...eventInit, button: 0, detail: 1 }));
-      if (typeof el.focus === 'function') el.focus();
-      el.dispatchEvent(new PointerEvent('pointerup', pointerInit));
-      el.dispatchEvent(new MouseEvent('mouseup', { ...eventInit, button: 0, detail: 1 }));
-      el.dispatchEvent(new MouseEvent('click', { ...eventInit, button: 0, detail: 1 }));
-    }
+    if (!target) return { action: null };
 
     const clickables = target.querySelectorAll('button, [role="button"], [class*="cursor-pointer"]');
     for (const el of clickables) {
@@ -197,6 +201,6 @@ function buildAutoActionScript(actions: string[]): string {
       ${checks.join("\n")}
     }
 
-    return { clicked: null };
+    return { action: null };
   })()`;
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiUrl } from "../../services/api";
+import { useI18n } from "../../i18n";
+import { useUIStore } from "../../stores/uiStore";
 
 type Props = {
   cascadeId: string | null;
@@ -25,10 +27,12 @@ async function postSend(cascadeId: string, message: string): Promise<void> {
 }
 
 export function MessageInput({ cascadeId }: Props) {
+  const t = useI18n();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const sendMode = useUIStore((s) => s.sendMode);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -63,6 +67,26 @@ export function MessageInput({ cascadeId }: Props) {
   const isMac = typeof window !== "undefined" && window.navigator.platform.includes("Mac");
   const canSend = !!cascadeId && !sending && !!text.trim();
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (sendMode === "enter") {
+      // Enter sends, Shift+Enter inserts newline
+      if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        void send();
+      }
+    } else {
+      // Ctrl+Enter (or Cmd+Enter on Mac) sends
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        void send();
+      }
+    }
+  }, [send, sendMode]);
+
+  const hintText = sendMode === "enter"
+    ? "↵"
+    : isMac ? "⌘↵" : "Ctrl+↵";
+
   return (
     <div className="border-t border-border/20 bg-gradient-to-t from-background via-background to-transparent px-3 sm:px-5 pt-1 pb-[calc(0.625rem+var(--safe-area-bottom))]">
       <div className="max-w-2xl mx-auto">
@@ -80,18 +104,13 @@ export function MessageInput({ cascadeId }: Props) {
             ref={textareaRef}
             className="flex-1 min-h-[42px] max-h-[160px] bg-transparent px-4 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground/35 focus:outline-none resize-none disabled:cursor-not-allowed"
             rows={1}
-            placeholder={cascadeId ? "Send a message…" : "Waiting for connection…"}
+            placeholder={cascadeId ? t("input.placeholder") : t("input.waiting")}
             value={text}
             disabled={!cascadeId || sending}
             onChange={(e) => setText(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void send();
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
 
           {/* Right side actions */}
@@ -103,7 +122,7 @@ export function MessageInput({ cascadeId }: Props) {
                 focused ? "opacity-100" : "opacity-0"
               ].join(" ")}
             >
-              {isMac ? "⌘↵" : "Ctrl+↵"}
+              {hintText}
             </span>
 
             {/* Send button */}

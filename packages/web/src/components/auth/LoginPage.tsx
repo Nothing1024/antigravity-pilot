@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { useI18n } from "../../i18n";
 import { apiUrl } from "../../services/api";
 
 type Props = {
@@ -7,6 +8,7 @@ type Props = {
 };
 
 export function LoginPage({ onSuccess }: Props) {
+  const t = useI18n();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,10 +32,10 @@ export function LoginPage({ onSuccess }: Props) {
           onSuccess();
         } else {
           const data = (await res.json()) as { error?: string };
-          setError(data.error || "Access Denied");
+          setError(data.error || t("login.error.denied"));
         }
       } catch {
-        setError("Network error. Please try again.");
+        setError(t("login.error.network"));
       } finally {
         setLoading(false);
       }
@@ -55,10 +57,10 @@ export function LoginPage({ onSuccess }: Props) {
             </svg>
           </div>
           <h1 className="mb-1 text-2xl font-semibold tracking-tight">
-            Antigravity
+            {t("login.title")}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Enter your password to continue
+            {t("login.subtitle")}
           </p>
         </div>
 
@@ -67,7 +69,7 @@ export function LoginPage({ onSuccess }: Props) {
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium leading-none">
-                Password
+                {t("login.password")}
               </label>
               <input
                 id="password"
@@ -87,7 +89,7 @@ export function LoginPage({ onSuccess }: Props) {
               disabled={loading}
               className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             >
-              {loading ? "Signing in…" : "Sign In"}
+              {loading ? t("login.submitting") : t("login.submit")}
             </button>
           </form>
 
@@ -104,7 +106,7 @@ export function LoginPage({ onSuccess }: Props) {
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          v3.0.0 &middot; Secure Connection
+          {t("login.footer")}
         </p>
       </div>
     </div>

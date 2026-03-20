@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
+import { useI18n } from "../../i18n";
+import { useUIStore } from "../../stores/uiStore";
 import { CascadeList } from "../drawer/CascadeList";
 import { DrawerActions } from "../drawer/DrawerActions";
 
@@ -30,7 +32,11 @@ function useIsLargeScreen() {
 
 export function AppShell({ title, children, onOpenProject, view, onViewChange }: Props) {
   const isLarge = useIsLargeScreen();
+  const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
+  const t = useI18n();
 
+  // On app startup, push localStorage settings to server (recovers from server restart)
+  useEffect(() => { pushAutoActionsToServer(); }, [pushAutoActionsToServer]);
   // Desktop: persistent toggle (remembered)
   const [desktopOpen, setDesktopOpen] = useState(() => {
     try { return localStorage.getItem("ag-sidebar-open") !== "false"; } catch { return true; }
@@ -72,8 +78,8 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
             type="button"
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             onClick={closeFn || toggleDesktop}
-            aria-label="Hide sidebar"
-            title="Hide sidebar"
+            aria-label={t("shell.hideSidebar")}
+            title={t("shell.hideSidebar")}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
@@ -85,7 +91,7 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
 
       {/* Sessions Label */}
       <div className="px-4 pt-4 pb-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Sessions</span>
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">{t("shell.sessions")}</span>
       </div>
 
       {/* Cascade List */}
@@ -106,8 +112,8 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
       type="button"
       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       onClick={isLarge ? toggleDesktop : openMobile}
-      aria-label="Show sidebar"
-      title="Show sidebar"
+      aria-label={t("shell.showSidebar")}
+      title={t("shell.showSidebar")}
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
@@ -134,7 +140,7 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
 
           <div className="flex flex-1 items-center gap-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0 text-sm">
-              <span className="font-medium text-muted-foreground/60 hidden sm:inline-block">Workspace</span>
+              <span className="font-medium text-muted-foreground/60 hidden sm:inline-block">{t("shell.workspace")}</span>
               <span className="text-border hidden sm:inline-block">/</span>
               <h1 className="truncate font-semibold text-foreground/90 tracking-tight">
                 {title}
@@ -154,7 +160,7 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
                     : "text-muted-foreground hover:text-foreground"
                 ].join(" ")}
               >
-                Chat
+                {t("shell.chat")}
               </button>
               <button
                 onClick={() => onViewChange("settings")}
@@ -165,14 +171,14 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
                     : "text-muted-foreground hover:text-foreground"
                 ].join(" ")}
               >
-                Config
+                {t("shell.config")}
               </button>
             </div>
 
             <button
               onClick={onOpenProject}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title="Open Project"
+              title={t("shell.openProject")}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
