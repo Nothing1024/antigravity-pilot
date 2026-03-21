@@ -40,6 +40,9 @@ const zhCN: Record<LocaleKeys, string> = {
   // Message Input
   "input.placeholder": "发送消息…",
   "input.waiting": "等待连接…",
+  "input.clear": "清空草稿",
+  "input.clearConfirm": "确定清空当前草稿吗？此操作不可撤销。",
+  "input.clearAction": "清空",
 
   // Settings
   "settings.appearance": "外观",

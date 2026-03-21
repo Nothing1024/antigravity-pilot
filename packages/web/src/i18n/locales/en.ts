@@ -38,6 +38,9 @@ const en = {
   // Message Input
   "input.placeholder": "Send a message…",
   "input.waiting": "Waiting for connection…",
+  "input.clear": "Clear draft",
+  "input.clearConfirm": "Clear the current draft? This cannot be undone.",
+  "input.clearAction": "Clear",
 
   // Settings
   "settings.appearance": "Appearance",

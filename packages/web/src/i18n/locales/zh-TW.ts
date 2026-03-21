@@ -40,6 +40,9 @@ const zhTW: Record<LocaleKeys, string> = {
   // Message Input
   "input.placeholder": "傳送訊息…",
   "input.waiting": "等待連線…",
+  "input.clear": "清空草稿",
+  "input.clearConfirm": "確定清空當前草稿嗎？此操作不可撤銷。",
+  "input.clearAction": "清空",
 
   // Settings
   "settings.appearance": "外觀",

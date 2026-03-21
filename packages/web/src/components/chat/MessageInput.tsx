@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../services/api";
 import { useI18n } from "../../i18n";
 import { useUIStore } from "../../stores/uiStore";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 type Props = {
   cascadeId: string | null;
@@ -26,13 +27,39 @@ async function postSend(cascadeId: string, message: string): Promise<void> {
   throw new Error(reason);
 }
 
+/**
+ * Per-cascade draft store — intentionally a module-level Map so that drafts
+ * survive React re-mounts (e.g. view switches) but are cleared on full
+ * page refresh.  This ephemeral lifetime is by design: long-lived drafts
+ * should use localStorage/sessionStorage instead.
+ */
+const drafts = new Map<string, string>();
+
 export function MessageInput({ cascadeId }: Props) {
   const t = useI18n();
-  const [text, setText] = useState("");
+  // Initialise from stored draft for this cascade
+  const [text, setTextRaw] = useState(() => (cascadeId ? drafts.get(cascadeId) || "" : ""));
   const [sending, setSending] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendMode = useUIStore((s) => s.sendMode);
+
+  // Wrapper: update both local state and the draft map
+  const setText = useCallback((value: string) => {
+    setTextRaw(value);
+    if (cascadeId) drafts.set(cascadeId, value);
+  }, [cascadeId]);
+
+  // When cascade switches, load the stored draft for the new cascade
+  const prevCascadeRef = useRef(cascadeId);
+  useEffect(() => {
+    if (cascadeId !== prevCascadeRef.current) {
+      prevCascadeRef.current = cascadeId;
+      setTextRaw(cascadeId ? drafts.get(cascadeId) || "" : "");
+      setShowClearConfirm(false);
+    }
+  }, [cascadeId]);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -62,10 +89,11 @@ export function MessageInput({ cascadeId }: Props) {
     } finally {
       setSending(false);
     }
-  }, [cascadeId, sending, text]);
+  }, [cascadeId, sending, text, setText]);
 
   const isMac = typeof window !== "undefined" && window.navigator.platform.includes("Mac");
   const canSend = !!cascadeId && !sending && !!text.trim();
+  const showTrash = text.length >= 20;
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (sendMode === "enter") {
@@ -115,6 +143,20 @@ export function MessageInput({ cascadeId }: Props) {
 
           {/* Right side actions */}
           <div className="flex items-center gap-1 pr-2 pb-1.5">
+            {/* Trash button — visible when text is long */}
+            {showTrash && (
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 hover:text-destructive/80 hover:bg-destructive/10 transition-colors"
+                title={t("input.clear")}
+                onClick={() => setShowClearConfirm(true)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </button>
+            )}
+
             {/* Shortcut hint */}
             <span
               className={[
@@ -153,6 +195,21 @@ export function MessageInput({ cascadeId }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Clear confirmation modal */}
+      {showClearConfirm && (
+        <ConfirmModal
+          message={t("input.clearConfirm")}
+          confirmLabel={t("input.clearAction")}
+          variant="destructive"
+          onConfirm={() => {
+            setText("");
+            setShowClearConfirm(false);
+            textareaRef.current?.focus();
+          }}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
     </div>
   );
 }
