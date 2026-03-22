@@ -2,6 +2,7 @@ import WebSocket from "ws";
 
 import type { CascadeEntry } from "../store/cascades";
 
+import { ConnectionState, ResponsePhase } from "@ag/shared";
 import { config } from "../config";
 import { connectCDP } from "../cdp/connection";
 import { extractMetadata } from "../cdp/metadata";
@@ -20,18 +21,17 @@ export async function discover(): Promise<void> {
   await Promise.all(
     config.cdpPorts.map(async (port) => {
       const list = await getJson<any[]>(`http://127.0.0.1:${port}/json/list`);
-      const workbenches = list.filter(
-        (t) => t.url?.includes("workbench.html") || t.title?.includes("workbench")
-      );
-      workbenches
-        .filter((t) => {
-          // Exclude Windsurf Manager windows — their title has only one " - "
-          // separator (e.g. "volatile-triangulum - Antigravity"), while real
-          // project windows have 2+ ("projectName - Antigravity - file.ext").
-          const title = t.title || "";
-          const separatorCount = (title.match(/ - /g) || []).length;
-          return separatorCount >= 2;
-        })
+      // Match real workbench pages but exclude jetski-agent pages
+      // (Settings, Manager, Launchpad use workbench-jetski-agent.html or
+      //  workbench-jetski.html — we only want regular workbench.html)
+      const isRealWorkbench = (t: any) => {
+        const url = t.url || "";
+        // Must contain workbench.html but NOT jetski variants
+        if (url.includes("workbench-jetski")) return false;
+        return url.includes("workbench.html") || t.title?.includes("workbench");
+      };
+      list
+        .filter(isRealWorkbench)
         .forEach((t) => {
           allTargets.push({ ...t, port });
         });
@@ -67,6 +67,10 @@ export async function discover(): Promise<void> {
             mode: meta.mode
           };
 
+          // Update connection state to CONNECTED (it was open)
+          existing.connectionState = ConnectionState.CONNECTED;
+          existing.consecutiveFailures = 0;
+
           if (meta.contextId) existing.cdp.rootContextId = meta.contextId; // Update optimization
           newCascades.set(id, existing);
           continue;
@@ -88,6 +92,7 @@ export async function discover(): Promise<void> {
           windowTitle: target.title,
           cascadeId: id
         });
+        const now = Date.now();
         const cascade: CascadeEntry = {
           id,
           cdp,
@@ -107,7 +112,24 @@ export async function discover(): Promise<void> {
           quota: null,
           quotaHash: null,
           stableCount: 0,
-          lastFeedbackFingerprint: null
+          lastFeedbackFingerprint: null,
+
+          // F1: Connection Pool fields
+          connectionState: ConnectionState.CONNECTED,
+          lastHealthCheck: now,
+          consecutiveFailures: 0,
+          reconnectAttempts: 0,
+          connectedAt: now,
+          reconnectTarget: {
+            webSocketDebuggerUrl: target.webSocketDebuggerUrl,
+            port: target.port,
+            title: target.title,
+          },
+
+          // F2: Response Monitor fields
+          phase: ResponsePhase.IDLE,
+          responseText: "",
+          lastPhaseChange: now,
         };
         newCascades.set(id, cascade);
         console.log(

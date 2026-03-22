@@ -40,6 +40,12 @@ function handleMessage(msg: WSMessage): void {
       });
       return;
     }
+    case "phase_change":
+      console.info(`[ws] phase_change ${msg.cascadeId} ${msg.previousPhase} → ${msg.phase}`);
+      return;
+    case "connection_state":
+      console.info(`[ws] connection_state ${msg.cascadeId} ${msg.previousState} → ${msg.state}`);
+      return;
     default: {
       const _exhaustive: never = msg;
       return _exhaustive;
