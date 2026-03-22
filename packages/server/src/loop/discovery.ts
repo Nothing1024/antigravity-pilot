@@ -23,9 +23,18 @@ export async function discover(): Promise<void> {
       const workbenches = list.filter(
         (t) => t.url?.includes("workbench.html") || t.title?.includes("workbench")
       );
-      workbenches.forEach((t) => {
-        allTargets.push({ ...t, port });
-      });
+      workbenches
+        .filter((t) => {
+          // Exclude Windsurf Manager windows — their title has only one " - "
+          // separator (e.g. "volatile-triangulum - Antigravity"), while real
+          // project windows have 2+ ("projectName - Antigravity - file.ext").
+          const title = t.title || "";
+          const separatorCount = (title.match(/ - /g) || []).length;
+          return separatorCount >= 2;
+        })
+        .forEach((t) => {
+          allTargets.push({ ...t, port });
+        });
     })
   );
 

@@ -90,12 +90,13 @@ export async function injectMessage(
                        document.querySelector('button[aria-label*="Send"]') ||
                        document.querySelector('button[type="submit"]');
 
+        let sendMethod;
         if (sendDiv) {
             sendDiv.click();
-            return { ok: true, method, editorSel: matchedSelector, sendMethod: "tooltip-div" };
+            sendMethod = "tooltip-div";
         } else if (sendBtn) {
             sendBtn.click();
-            return { ok: true, method, editorSel: matchedSelector, sendMethod: "button" };
+            sendMethod = "button";
         } else {
             // Fallback: dispatch Enter key with full event properties
             const enterEvent = new KeyboardEvent("keydown", {
@@ -108,8 +109,27 @@ export async function injectMessage(
                 composed: true
             });
             editor.dispatchEvent(enterEvent);
-            return { ok: true, method, editorSel: matchedSelector, sendMethod: "enter-key" };
+            sendMethod = "enter-key";
         }
+
+        // Clear leftover text from the editor after send.
+        // execCommand("insertText") bypasses the IDE's React state, so the
+        // IDE may not clear the DOM automatically after sending.
+        // 300ms delay gives React enough time to process the send action
+        // before we check for & remove any residual DOM content.
+        await new Promise(r => setTimeout(r, 300));
+        const leftover = (editor.textContent || '').trim();
+        if (leftover) {
+            editor.focus();
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand("delete", false, null);
+        }
+
+        return { ok: true, method, editorSel: matchedSelector, sendMethod };
     })()`;
 
   try {

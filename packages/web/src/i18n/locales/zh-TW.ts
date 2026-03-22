@@ -34,10 +34,15 @@ const zhTW: Record<LocaleKeys, string> = {
   "drawer.newConversation": "新建對話",
   "drawer.openProject": "開啟專案",
   "drawer.terminateAll": "終止全部",
+  "drawer.terminateConfirm": "此操作將終止所有 Antigravity 實例，確定嗎？",
+  "drawer.confirm": "確認",
 
   // Message Input
   "input.placeholder": "傳送訊息…",
   "input.waiting": "等待連線…",
+  "input.clear": "清空草稿",
+  "input.clearConfirm": "確定清空當前草稿嗎？此操作不可撤銷。",
+  "input.clearAction": "清空",
 
   // Settings
   "settings.appearance": "外觀",

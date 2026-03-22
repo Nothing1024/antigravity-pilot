@@ -34,10 +34,15 @@ const zhCN: Record<LocaleKeys, string> = {
   "drawer.newConversation": "新建对话",
   "drawer.openProject": "打开项目",
   "drawer.terminateAll": "终止所有",
+  "drawer.terminateConfirm": "此操作将终止所有 Antigravity 实例，确定吗？",
+  "drawer.confirm": "确认",
 
   // Message Input
   "input.placeholder": "发送消息…",
   "input.waiting": "等待连接…",
+  "input.clear": "清空草稿",
+  "input.clearConfirm": "确定清空当前草稿吗？此操作不可撤销。",
+  "input.clearAction": "清空",
 
   // Settings
   "settings.appearance": "外观",

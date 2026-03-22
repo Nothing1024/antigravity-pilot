@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n } from "../../i18n";
+import { switchConversation } from "../../services/cascadeService";
+import { useCascadeStore } from "../../stores/cascadeStore";
 import { useUIStore } from "../../stores/uiStore";
 import { CascadeList } from "../drawer/CascadeList";
 import { DrawerActions } from "../drawer/DrawerActions";
@@ -33,6 +35,7 @@ function useIsLargeScreen() {
 export function AppShell({ title, children, onOpenProject, view, onViewChange }: Props) {
   const isLarge = useIsLargeScreen();
   const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
+  const currentCascadeId = useCascadeStore((s) => s.currentId);
   const t = useI18n();
 
   // On app startup, push localStorage settings to server (recovers from server restart)
@@ -140,7 +143,17 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
 
           <div className="flex flex-1 items-center gap-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0 text-sm">
-              <span className="font-medium text-muted-foreground/60 hidden sm:inline-block">{t("shell.workspace")}</span>
+              <button
+                type="button"
+                className="font-medium text-muted-foreground/60 hidden sm:inline-block hover:text-primary/80 transition-colors cursor-pointer"
+                title={t("drawer.newConversation")}
+                onClick={() => {
+                  if (!currentCascadeId) return;
+                  void switchConversation(currentCascadeId);
+                }}
+              >
+                {t("shell.workspace")}
+              </button>
               <span className="text-border hidden sm:inline-block">/</span>
               <h1 className="truncate font-semibold text-foreground/90 tracking-tight">
                 {title}

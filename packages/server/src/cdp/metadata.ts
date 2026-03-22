@@ -18,11 +18,23 @@ export async function extractMetadata(cdp: CDPConnection): Promise<ExtractedMeta
 
         const root = conversation || chat || cascade || document;
         const generic = new Set(['explore', 'agent', 'chat', 'new chat', 'new conversation', 'conversation', 'home', 'settings', 'search', 'source control', 'run and debug', 'extensions', 'terminal', 'output', 'debug console', 'problems', 'status bar', 'notifications']);
-        const clean = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+        const clean = (v) => String(v || '').replace(/\\s+/g, ' ').trim();
         const valid = (v) => {
             const t = clean(v);
             if (t.length < 3 || t.length > 80) return false;
             if (generic.has(t.toLowerCase())) return false;
+
+            // Reject quota-like strings: "185.3k/1M, 18.5%", "500/1000", etc.
+            if (/\\d+[.\\d]*[kKmM]?\\s*\\/\\s*\\d+[.\\d]*[kKmM]?/.test(t)) return false;
+            // Reject percentage-dominated: "18.5%", "100%", etc.
+            if (/^\\s*[\\d.,]+\\s*%/.test(t)) return false;
+            // Reject strings that are mostly digits/punctuation.
+            // MIN_LETTER_RATIO 0.3 = at least 30% of characters must be letters;
+            // below this threshold the text is likely a quota or numeric indicator.
+            const MIN_LETTER_RATIO = 0.3;
+            const stripped = t.replace(/[^a-zA-Z]/g, '');
+            if (stripped.length < t.length * MIN_LETTER_RATIO && t.length > 3) return false;
+
             // Detect concatenated UI text: usually has many words without spaces or weird casing
             // Or contains multiple action-like words
             const uiKeywords = ['Log in', 'Sign in', 'Open', 'View', 'Manager', 'Account', 'Profile', 'Menu'];
@@ -42,7 +54,7 @@ export async function extractMetadata(cdp: CDPConnection): Promise<ExtractedMeta
         const pickMeaningfulPart = (value) => {
             const text = clean(value);
             if (!text) return '';
-            const parts = text.split(/[—-]/).map(clean).filter(Boolean);
+            const parts = text.split(/[\u2014-]/).map(clean).filter(Boolean);
             for (const part of parts) {
                 if (valid(part)) return part;
             }

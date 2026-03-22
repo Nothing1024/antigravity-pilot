@@ -6,7 +6,7 @@
   "description": "Mobile-first PWA for remotely monitoring & controlling Antigravity IDE sessions",
   "scripts": {
     "predev": "pnpm --filter @ag/shared build",
-    "dev": "pnpm --filter @ag/server dev & pnpm --filter @ag/web dev",
+    "dev": "run-p dev:server dev:web",
     "dev:server": "pnpm --filter @ag/server dev",
     "dev:web": "pnpm --filter @ag/web dev",
     "build": "pnpm --filter @ag/shared build && pnpm --filter @ag/web build && pnpm --filter @ag/server build",
@@ -27,5 +27,8 @@
     "onlyBuiltDependencies": [
       "react-grab"
     ]
+  },
+  "devDependencies": {
+    "npm-run-all2": "^8.0.4"
   }
 }

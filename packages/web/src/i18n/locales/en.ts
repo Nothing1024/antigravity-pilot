@@ -32,10 +32,15 @@ const en = {
   "drawer.newConversation": "New Conversation",
   "drawer.openProject": "Open Project",
   "drawer.terminateAll": "Terminate All",
+  "drawer.terminateConfirm": "This will kill all Antigravity instances. Are you sure?",
+  "drawer.confirm": "Confirm",
 
   // Message Input
   "input.placeholder": "Send a message…",
   "input.waiting": "Waiting for connection…",
+  "input.clear": "Clear draft",
+  "input.clearConfirm": "Clear the current draft? This cannot be undone.",
+  "input.clearAction": "Clear",
 
   // Settings
   "settings.appearance": "Appearance",
