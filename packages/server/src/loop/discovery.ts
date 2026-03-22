@@ -5,6 +5,8 @@ import type { CascadeEntry } from "../store/cascades";
 import { config } from "../config";
 import { connectCDP } from "../cdp/connection";
 import { extractMetadata } from "../cdp/metadata";
+import { injectSimplify } from "../cdp/simplify";
+import { getSimplifyMode } from "../cdp/simplifyState";
 import { captureCSS, captureComputedVars } from "../capture/css";
 import { cascadeStore } from "../store/cascades";
 import { broadcastCascadeList } from "../ws/broadcast";
@@ -102,6 +104,19 @@ export async function discover(): Promise<void> {
         console.log(
           `✅ Added cascade: ${resolvedTitle.title} (${resolvedTitle.source})`
         );
+
+        // Auto-apply simplify mode to newly discovered cascades
+        const simplifyMode = getSimplifyMode();
+        if (simplifyMode !== "off") {
+          try {
+            const result = await injectSimplify(cdp, simplifyMode);
+            if (result.ok) {
+              console.log(`🎨 Auto-applied simplify (${simplifyMode}) to new cascade "${resolvedTitle.title}"`);
+            }
+          } catch {
+            // Non-critical: simplify failure shouldn't block discovery
+          }
+        }
       } else {
         cdp.ws.close();
       }

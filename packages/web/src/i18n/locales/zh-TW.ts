@@ -70,6 +70,15 @@ const zhTW: Record<LocaleKeys, string> = {
   "settings.about": "關於",
   "settings.version": "版本",
   "settings.stack": "技術堆疊",
+  "settings.simplify": "IDE GPU 簡化",
+  "settings.simplify.desc": "向 IDE 注入 CSS 以降低 GPU 渲染開銷。",
+  "settings.simplify.full": "完全簡化",
+  "settings.simplify.full.desc": "隱藏編輯器、側邊欄、終端 — 僅保留聊天面板。",
+  "settings.simplify.light": "輕度簡化",
+  "settings.simplify.light.desc": "停用動畫，隱藏小地圖和終端。",
+  "settings.simplify.off": "關閉",
+  "settings.simplify.off.desc": "正常 IDE 渲染。",
+  "settings.simplify.applying": "套用中…",
 
   // Project Browser
   "project.title": "開啟專案",

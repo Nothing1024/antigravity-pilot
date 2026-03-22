@@ -5,6 +5,8 @@ import path from "node:path";
 import express from "express";
 
 import { autoActionSettings } from "../autoaction/index";
+import { injectSimplify, removeSimplify, isSimplified } from "../cdp/simplify";
+import { getSimplifyMode, setSimplifyMode } from "../cdp/simplifyState";
 import { config } from "../config";
 import { addSubscription, removeSubscription } from "../push/sender";
 import { cascadeStore } from "../store/cascades";
@@ -380,4 +382,79 @@ cascadeRouter.put("/api/auto-actions", (req, res) => {
     autoRetry: autoActionSettings.autoRetry,
     retryBackoff: autoActionSettings.retryBackoff
   });
+});
+
+// --- IDE Simplification (GPU reduction) ---
+
+// Global simplify mode query (frontend syncs on mount)
+cascadeRouter.get("/api/simplify-mode", (_req, res) => {
+  res.json({ mode: getSimplifyMode() });
+});
+
+cascadeRouter.get("/api/simplify/:id", async (req, res) => {
+  const c = cascadeStore.get(req.params.id);
+  if (!c) return res.status(404).json({ error: "Cascade not found" });
+  try {
+    const active = await isSimplified(c.cdp);
+    res.json({ simplified: active });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+cascadeRouter.post("/api/simplify/:id", async (req, res) => {
+  const c = cascadeStore.get(req.params.id);
+  if (!c) return res.status(404).json({ error: "Cascade not found" });
+  const mode = req.body?.mode === "light" ? "light" : "full";
+  try {
+    const result = await injectSimplify(c.cdp, mode);
+    if (result.ok) {
+      console.log(`🎨 Simplify (${mode}) applied to "${c.metadata.chatTitle}": ${(result as any).applied?.join(", ")}`);
+    }
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ ok: false, reason: e.message });
+  }
+});
+
+cascadeRouter.delete("/api/simplify/:id", async (req, res) => {
+  const c = cascadeStore.get(req.params.id);
+  if (!c) return res.status(404).json({ error: "Cascade not found" });
+  try {
+    const result = await removeSimplify(c.cdp);
+    console.log(`🎨 Simplify removed from "${c.metadata.chatTitle}"`);
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ ok: false, reason: e.message });
+  }
+});
+
+// --- Simplify ALL cascades at once ---
+cascadeRouter.post("/api/simplify-all", async (req, res) => {
+  const mode = req.body?.mode === "light" ? "light" as const : "full" as const;
+  setSimplifyMode(mode);
+  const results: Record<string, any> = {};
+  for (const c of cascadeStore.getAll()) {
+    try {
+      results[c.id] = await injectSimplify(c.cdp, mode);
+    } catch (e: any) {
+      results[c.id] = { ok: false, reason: e.message };
+    }
+  }
+  console.log(`🎨 Simplify-all (${mode}) applied to ${Object.keys(results).length} cascades`);
+  res.json({ results });
+});
+
+cascadeRouter.delete("/api/simplify-all", async (_req, res) => {
+  setSimplifyMode("off");
+  const results: Record<string, any> = {};
+  for (const c of cascadeStore.getAll()) {
+    try {
+      results[c.id] = await removeSimplify(c.cdp);
+    } catch (e: any) {
+      results[c.id] = { ok: false, reason: e.message };
+    }
+  }
+  console.log(`🎨 Simplify-all removed from ${Object.keys(results).length} cascades`);
+  res.json({ results });
 });

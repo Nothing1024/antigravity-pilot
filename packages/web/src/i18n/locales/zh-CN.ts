@@ -70,6 +70,15 @@ const zhCN: Record<LocaleKeys, string> = {
   "settings.about": "关于",
   "settings.version": "版本",
   "settings.stack": "技术栈",
+  "settings.simplify": "IDE GPU 简化",
+  "settings.simplify.desc": "向 IDE 注入 CSS 以降低 GPU 渲染开销。",
+  "settings.simplify.full": "完全简化",
+  "settings.simplify.full.desc": "隐藏编辑器、侧栏、终端 — 仅保留聊天面板。",
+  "settings.simplify.light": "轻度简化",
+  "settings.simplify.light.desc": "禁用动画，隐藏小地图和终端。",
+  "settings.simplify.off": "关闭",
+  "settings.simplify.off.desc": "正常 IDE 渲染。",
+  "settings.simplify.applying": "应用中…",
 
   // Project Browser
   "project.title": "打开项目",

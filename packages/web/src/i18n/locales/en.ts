@@ -68,6 +68,15 @@ const en = {
   "settings.about": "About",
   "settings.version": "Version",
   "settings.stack": "Stack",
+  "settings.simplify": "IDE GPU Simplification",
+  "settings.simplify.desc": "Inject CSS into the IDE to reduce GPU rendering overhead.",
+  "settings.simplify.full": "Full",
+  "settings.simplify.full.desc": "Hide editor, sidebar, terminal — only keep chat panel.",
+  "settings.simplify.light": "Light",
+  "settings.simplify.light.desc": "Disable animations, hide minimap & terminal.",
+  "settings.simplify.off": "Off",
+  "settings.simplify.off.desc": "Normal IDE rendering.",
+  "settings.simplify.applying": "Applying…",
 
   // Project Browser
   "project.title": "Open Project",

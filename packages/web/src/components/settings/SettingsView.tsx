@@ -5,6 +5,8 @@ import { useI18n, ALL_LOCALES, LOCALE_LABELS } from "../../i18n";
 import { apiUrl } from "../../services/api";
 import { useUIStore } from "../../stores/uiStore";
 
+type SimplifyMode = "off" | "light" | "full";
+
 type Props = {
   visible: boolean;
 };
@@ -22,11 +24,61 @@ export function SettingsView({ visible }: Props) {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [simplifyMode, setSimplifyModeState] = useState<SimplifyMode>(
+    () => (localStorage.getItem("ag-simplify-mode") as SimplifyMode) || "off"
+  );
+  const [simplifyLoading, setSimplifyLoading] = useState(false);
+
+  const applySimplify = useCallback(async (mode: SimplifyMode) => {
+    setSimplifyLoading(true);
+    setSimplifyModeState(mode);
+    localStorage.setItem("ag-simplify-mode", mode);
+    try {
+      if (mode === "off") {
+        await fetch(apiUrl("/api/simplify-all"), { method: "DELETE", credentials: "include" });
+      } else {
+        await fetch(apiUrl("/api/simplify-all"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ mode })
+        });
+      }
+    } catch (err) {
+      console.error("Simplify toggle error:", err);
+    } finally {
+      setSimplifyLoading(false);
+    }
+  }, []);
 
   // Push localStorage state to server on mount (recovers server state after restart)
   useEffect(() => {
     pushAutoActionsToServer();
   }, [pushAutoActionsToServer]);
+
+  // Sync simplify mode from server on mount
+  // (server is authoritative — it auto-applies to new sessions via discovery)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(apiUrl("/api/simplify-mode"), { credentials: "include" });
+        if (!res.ok) return;
+        const { mode } = await res.json() as { mode: SimplifyMode };
+        const localMode = (localStorage.getItem("ag-simplify-mode") as SimplifyMode) || "off";
+
+        if (mode !== "off") {
+          // Server has active mode → adopt it
+          setSimplifyModeState(mode);
+          localStorage.setItem("ag-simplify-mode", mode);
+        } else if (localMode !== "off") {
+          // Server forgot (restarted) but localStorage remembers → push to server
+          void applySimplify(localMode);
+        }
+      } catch {
+        // Server unreachable, keep localStorage value
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -294,6 +346,49 @@ export function SettingsView({ visible }: Props) {
             ) : (
               <p className="text-sm text-muted-foreground">{t("settings.push.unsupported")}</p>
             )}
+          </div>
+        </div>
+
+        {/* IDE GPU Simplification */}
+        <div className="rounded-lg border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium">{t("settings.simplify")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.simplify.desc")}</p>
+          </div>
+          <div className="flex gap-2 p-4">
+            {([
+              { value: "off" as SimplifyMode, labelKey: "settings.simplify.off" as const, descKey: "settings.simplify.off.desc" as const },
+              { value: "light" as SimplifyMode, labelKey: "settings.simplify.light" as const, descKey: "settings.simplify.light.desc" as const },
+              { value: "full" as SimplifyMode, labelKey: "settings.simplify.full" as const, descKey: "settings.simplify.full.desc" as const },
+            ]).map((opt) => {
+              const active = simplifyMode === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={simplifyLoading}
+                  className={[
+                    "flex-1 inline-flex flex-col items-center gap-1 rounded-md border p-3 text-xs font-medium transition-colors disabled:opacity-50",
+                    active
+                      ? "border-ring bg-accent text-accent-foreground"
+                      : "border-transparent hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                  ].join(" ")}
+                  onClick={() => void applySimplify(opt.value)}
+                >
+                  {opt.value === "off" && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  )}
+                  {opt.value === "light" && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                  )}
+                  {opt.value === "full" && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  )}
+                  <span>{simplifyLoading && active ? t("settings.simplify.applying") : t(opt.labelKey)}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">{t(opt.descKey)}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
