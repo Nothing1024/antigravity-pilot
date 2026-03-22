@@ -279,9 +279,8 @@ async function main() {
           expression: `(() => {
             const el = document.getElementById("${STYLE_ID}");
             if (el) el.remove();
-            // 清除 sash 标记 + 恢复 rAF
+            // 清除 sash 标记
             document.querySelectorAll('.monaco-sash[data-ag-sash]').forEach(sa => sa.removeAttribute('data-ag-sash'));
-            if (window.__agOrigRAF) { window.requestAnimationFrame = window.__agOrigRAF; delete window.__agOrigRAF; }
             return el ? "removed" : "not_found";
           })()`,
           returnByValue: true,
@@ -315,13 +314,7 @@ async function main() {
           const runningAnims = document.getAnimations?.() || [];
           let cancelled = 0;
           runningAnims.forEach(a => { try { a.cancel(); cancelled++; } catch {} });
-          // rAF 节流：降到 ~5fps（每 200ms 一帧）
-          if (!window.__agOrigRAF) {
-            window.__agOrigRAF = window.requestAnimationFrame;
-            window.requestAnimationFrame = (cb) => {
-              return setTimeout(() => window.__agOrigRAF(cb), 200);
-            };
-          }
+          // 注意: 不做 rAF 节流 — 会导致聊天面板/WebUI 更新中断
           ` : ''}
           const anims = document.getAnimations?.()?.length || 0;
           return { ok: true, anims${MODE === "full" ? ", cancelled" : ""} };

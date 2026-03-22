@@ -145,13 +145,7 @@ export async function injectSimplify(
     const runningAnims = document.getAnimations?.() || [];
     runningAnims.forEach(a => { try { a.cancel(); } catch {} });
 
-    // Throttle requestAnimationFrame to ~5fps
-    if (!window.__agOrigRAF) {
-      window.__agOrigRAF = window.requestAnimationFrame;
-      window.requestAnimationFrame = (cb) => {
-        return setTimeout(() => window.__agOrigRAF(cb), 200);
-      };
-    }
+    // NOTE: no rAF throttling — it breaks chat panel / WebUI updates
     ` : ''}
 
     return { ok: true, location: window.location.href.substring(0, 80) };
@@ -202,8 +196,6 @@ export async function removeSimplify(cdp: CDPConnection): Promise<SimplifyResult
     if (el) el.remove();
     // Clean up sash markers
     document.querySelectorAll('.monaco-sash[data-ag-sash]').forEach(sa => sa.removeAttribute('data-ag-sash'));
-    // Restore requestAnimationFrame
-    if (window.__agOrigRAF) { window.requestAnimationFrame = window.__agOrigRAF; delete window.__agOrigRAF; }
     return { ok: true, removed: !!el };
   })()`;
 
