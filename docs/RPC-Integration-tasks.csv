@@ -1,0 +1,229 @@
+序号,Phase,名称,描述,涉及文件,前置任务,验证命令,注意事项,优先级,状态
+1,P0:准备工作,创建 RPC 目录结构,"【做什么】创建 rpc/ 目录和 platform/ 子目录
+【为什么】后续所有 RPC 模块都要放在这个目录下，必须先建好
+【具体操作】①执行 mkdir -p packages/server/src/rpc/platform ②执行 ls packages/server/src/rpc 确认目录存在
+【验收标准】目录存在且可访问",packages/server/src/rpc/,无,ls packages/server/src/rpc → 显示 platform 目录,无,P0,待开始
+2,P0:准备工作,定义 LSInstance 类型,"【做什么】创建 rpc/types.ts，定义 LSInstance 接口
+【为什么】所有 RPC 模块都要用这个类型，必须先定义
+【具体操作】①创建 packages/server/src/rpc/types.ts ②从 porta/packages/proxy/src/discovery.ts L25-34 复制 LSInstance 接口定义 ③确保包含 pid, httpsPort, httpPort, lspPort, csrfToken, workspaceId?, source 字段
+【验收标准】文件存在，TypeScript 编译通过",packages/server/src/rpc/types.ts,1,grep ""interface LSInstance"" packages/server/src/rpc/types.ts → 有输出,字段必须完整，不要漏掉 workspaceId? 和 source,P0,待开始
+3,P0:准备工作,定义 TrajectoryStep 类型,"【做什么】在 shared 包定义 TrajectoryStep 接口
+【为什么】前后端都要用这个类型表示步骤数据
+【具体操作】①创建 packages/shared/src/types/trajectory.ts ②定义 TrajectoryStep 接口，包含 stepId, type, status, content?, timestamp?, clientMessageId?, _corrupted? 字段 ③在 packages/shared/src/index.ts 导出该类型
+【验收标准】类型定义完整，pnpm build 编译通过",packages/shared/src/types/trajectory.ts; packages/shared/src/index.ts,无,pnpm build → 编译通过,不要忘记在 index.ts 导出，否则其他包无法 import,P0,待开始
+4,P0:准备工作,验证依赖关系,"【做什么】确认 @ag/server 依赖 @ag/shared
+【为什么】server 要 import shared 的类型，必须有依赖关系
+【具体操作】①打开 packages/server/package.json ②检查 dependencies 中是否有 ""@ag/shared"": ""workspace:*"" ③如果没有则添加 ④执行 pnpm install
+【验收标准】grep 有输出且 pnpm install 无报错",packages/server/package.json,无,grep ""@ag/shared"" packages/server/package.json → 有输出,workspace:* 表示使用本地 workspace 版本，不要写具体版本号,P1,待开始
+5,P0:准备工作,Phase 0 回归验证,"【做什么】验证 Phase 0 所有改动编译通过
+【为什么】确保基础结构正确，Phase 1 才能开始
+【具体操作】①执行 pnpm build ②检查是否有编译错误 ③执行 git status 查看改动文件
+【验收标准】编译通过，新增 3 个文件，无其他改动",所有 Phase 0 涉及文件,1;2;3;4,pnpm build → 无错误,如果编译失败，检查类型导出是否正确,P0,待开始
+6,P1:RPC基础设施,复制平台适配器目录,"【做什么】从 porta 复制整个 platform/ 目录
+【为什么】LS 发现需要 OS 特定的进程扫描逻辑
+【具体操作】①cd /Users/nothing/workspace/antigravity/porta ②cp -r packages/proxy/src/platform /Users/nothing/workspace/antigravity/antigravity-pilot/packages/server/src/rpc/ ③验证文件数量
+【验收标准】5 个 .ts 文件存在（index.ts, types.ts, darwin.ts, linux.ts, win32.ts, shared.ts）",packages/server/src/rpc/platform/,5,ls packages/server/src/rpc/platform/*.ts | wc -l → 显示 6,不要修改文件内容，直接复制,P0,待开始
+7,P1:RPC基础设施,复制 transport-hints 模块,"【做什么】从 porta 复制 transport-hints.ts
+【为什么】RPC 客户端需要记住上次成功的协议（HTTP/HTTPS）
+【具体操作】①从 porta/packages/proxy/src/transport-hints.ts 复制到 packages/server/src/rpc/transport-hints.ts ②验证行数约 41 行
+【验收标准】文件存在，wc -l 显示约 41 行",packages/server/src/rpc/transport-hints.ts,5,wc -l packages/server/src/rpc/transport-hints.ts → 约 41 行,无,P0,待开始
+8,P1:RPC基础设施,复制 discovery 主逻辑,"【做什么】从 porta 复制 discovery.ts
+【为什么】这是 LS 发现的核心逻辑，包含 daemon 文件读取和进程扫描
+【具体操作】①从 porta/packages/proxy/src/discovery.ts 复制到 packages/server/src/rpc/discovery.ts ②验证行数约 418 行
+【验收标准】文件存在，wc -l 显示约 418 行",packages/server/src/rpc/discovery.ts,5,wc -l packages/server/src/rpc/discovery.ts → 约 418 行,无,P0,待开始
+9,P1:RPC基础设施,修改 discovery import 路径,"【做什么】移除 discovery.ts 中的 .js 后缀
+【为什么】porta 使用 ESM 需要 .js 后缀，本项目不需要
+【具体操作】①打开 packages/server/src/rpc/discovery.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx"" ④特别注意 from ""./platform/index.js"" 改为 from ""./platform/index""
+【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/discovery.ts,8,grep ""\.js"" packages/server/src/rpc/discovery.ts → 无输出,最容易漏掉 platform/index.js，必须仔细检查,P0,待开始
+10,P1:RPC基础设施,复制 RPC 客户端,"【做什么】从 porta 复制 rpc.ts 并重命名为 client.ts
+【为什么】这是 RPC 调用的核心客户端，处理 HTTP/HTTPS 双协议回退
+【具体操作】①从 porta/packages/proxy/src/rpc.ts 复制到 packages/server/src/rpc/client.ts ②验证行数约 310 行
+【验收标准】文件存在，wc -l 显示约 310 行",packages/server/src/rpc/client.ts,5,wc -l packages/server/src/rpc/client.ts → 约 310 行,无,P0,待开始
+11,P1:RPC基础设施,修改 client import 路径,"【做什么】移除 client.ts 中的 .js 后缀
+【为什么】同 discovery，本项目不需要 .js 后缀
+【具体操作】①打开 packages/server/src/rpc/client.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx"" ④特别注意 from ""./discovery.js"" 和 from ""./transport-hints.js""
+【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/client.ts,10,grep ""\.js"" packages/server/src/rpc/client.ts → 无输出,无,P0,待开始
+12,P1:RPC基础设施,复制 routing 模块,"【做什么】从 porta 复制 routing.ts
+【为什么】这是工作区路由的核心逻辑，包含 affinity 缓存和归一化
+【具体操作】①从 porta/packages/proxy/src/routing.ts 复制到 packages/server/src/rpc/routing.ts ②验证行数约 331 行
+【验收标准】文件存在，wc -l 显示约 331 行",packages/server/src/rpc/routing.ts,5,wc -l packages/server/src/rpc/routing.ts → 约 331 行,无,P0,待开始
+13,P1:RPC基础设施,修改 routing import 路径,"【做什么】移除 routing.ts 中的 .js 后缀
+【为什么】同上
+【具体操作】①打开 packages/server/src/rpc/routing.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx""
+【验收标准】grep 无 .js 后缀，确保导出 discovery 和 rpc 单例",packages/server/src/rpc/routing.ts,12,grep ""export const discovery"" packages/server/src/rpc/routing.ts → 有输出,必须确保导出 discovery 和 rpc 单例，其他模块要用,P0,待开始
+14,P1:RPC基础设施,编译验证 RPC 模块,"【做什么】验证所有 RPC 模块编译通过
+【为什么】确保 import 路径和类型定义都正确
+【具体操作】①执行 pnpm build ②检查是否有编译错误 ③特别注意 LSInstance 类型是否正确导入
+【验收标准】编译通过，无类型错误",所有 RPC 模块,6;7;8;9;10;11;12;13,pnpm build → 无错误,如果报 LSInstance 找不到，检查 types.ts 是否正确导出,P0,待开始
+15,P1:RPC基础设施,Phase 1 回归验证,"【做什么】验证 Phase 1 所有改动正确且可用
+【为什么】确保 RPC 基础设施可用，Phase 2 才能开始
+【具体操作】①执行 pnpm build ②启动真实 AG 实例 ③创建测试脚本调用 discoverInstances() ④检查是否能发现 LS
+【验收标准】编译通过，能发现至少 1 个 LS 实例",所有 Phase 1 涉及文件,14,node -e ""const {discoverInstances} = require('./packages/server/dist/rpc/discovery.js'); discoverInstances().then(console.log)"" → 返回 LS 数组,如果发现失败，检查 AG 是否启动，daemon 文件是否存在,P0,待开始
+16,P2:消息发送迁移,创建 fallback 模块,"【做什么】创建 rpc/fallback.ts，实现 RPC 优先 + CDP 降级
+【为什么】消息发送要先尝试 RPC，失败时回退到 CDP
+【具体操作】①创建 packages/server/src/rpc/fallback.ts ②实现 sendMessageWithFallback(cascadeId, content) 函数 ③函数内先调用 rpcForConversation(""SendUserCascadeMessage"", ...) ④catch 错误后调用原 injectMessage() ⑤添加日志区分 RPC/CDP 路径
+【验收标准】文件存在，导出 sendMessageWithFallback 函数",packages/server/src/rpc/fallback.ts,15,grep ""export.*sendMessageWithFallback"" packages/server/src/rpc/fallback.ts → 有输出,SendUserCascadeMessage 的 body 格式必须是 { cascadeId, userMessage: { parts: [{ text }] } }，不是直接传字符串,P0,待开始
+17,P2:消息发送迁移,修改 interaction.ts 调用 RPC,"【做什么】将 interaction.ts 的消息发送改为调用 sendMessageWithFallback
+【为什么】这是消息发送的入口，改这里就能让所有消息走 RPC
+【具体操作】①打开 packages/server/src/api/interaction.ts ②找到 L29 的 await injectMessage(c.cdp, req.body.message) ③改为 await sendMessageWithFallback(req.params.id, req.body.message) ④在文件顶部 import { sendMessageWithFallback } from '../rpc/fallback'
+【验收标准】grep 有输出，编译通过",packages/server/src/api/interaction.ts,16,grep ""sendMessageWithFallback"" packages/server/src/api/interaction.ts → 有输出,不要删除 injectMessage 的 import，fallback 模块还要用,P0,待开始
+18,P2:消息发送迁移,添加 RPC 配置项,"【做什么】在 config.ts 添加 rpc.preferRpcForMessages 配置
+【为什么】需要配置开关控制是否启用 RPC
+【具体操作】①打开 packages/server/src/config.ts ②在配置接口中添加 rpc 字段 ③添加 preferRpcForMessages: boolean 配置项 ④默认值设为 true
+【验收标准】grep 有输出，编译通过",packages/server/src/config.ts,无,grep ""preferRpcForMessages"" packages/server/src/config.ts → 有输出,配置项要有默认值，否则未配置时会报错,P1,待开始
+19,P2:消息发送迁移,测试 RPC 消息发送,"【做什么】启动服务器，测试消息发送是否走 RPC
+【为什么】验证 RPC 路径正常工作
+【具体操作】①启动 AG 实例 ②启动服务器 pnpm dev:server ③发送测试消息 curl -X POST http://localhost:3563/api/cascades/{id}/message -d '{""message"":""test""}' ④检查日志是否显示 ""Using RPC for message""
+【验收标准】日志显示 RPC 路径，消息发送成功",无（运行时测试）,17;18,日志显示 ""Using RPC"" 或类似信息,如果 RPC 失败，检查 cascadeId 是否正确，LS 是否可达,P0,待开始
+20,P2:消息发送迁移,测试 CDP 降级,"【做什么】停止 LS，测试是否自动降级到 CDP
+【为什么】验证降级机制正常工作
+【具体操作】①停止 AG 实例 ②发送测试消息（同上） ③检查日志是否显示 ""Fallback to CDP""
+【验收标准】日志显示降级，消息仍然发送成功",无（运行时测试）,19,日志显示 ""Fallback to CDP"" 或类似信息,降级后消息应该仍能成功，如果失败说明 CDP 路径有问题,P1,待开始
+21,P2:消息发送迁移,Phase 2 回归验证,"【做什么】验证 Phase 2 所有改动正确
+【为什么】确保消息发送功能正常，Phase 3 才能开始
+【具体操作】①执行 pnpm build ②启动 AG 和服务器 ③测试 RPC 和 CDP 两种路径 ④执行 git add -A && git commit -m ""refactor: Phase 2 - 消息发送迁移""
+【验收标准】编译通过，两种路径都能发送消息",所有 Phase 2 涉及文件,19;20,pnpm build → 无错误; 两种路径测试通过,Phase 完成后必须 commit，否则后续 Phase 改动会混在一起,P0,待开始
+22,P3:状态检测迁移,添加 RPC 状态查询函数,"【做什么】在 monitor/phase.ts 添加 getRpcStatus() 函数
+【为什么】需要通过 RPC 获取对话状态，替代部分 DOM 检测
+【具体操作】①打开 packages/server/src/monitor/phase.ts ②在文件顶部 import { rpcForConversation } from '../rpc/routing' ③添加 async function getRpcStatus(cascadeId: string) 函数 ④函数内调用 rpcForConversation('GetCascadeTrajectory', cascadeId, { cascadeId }) ⑤返回 status 字段
+【验收标准】函数存在，编译通过",packages/server/src/monitor/phase.ts,21,grep ""getRpcStatus"" packages/server/src/monitor/phase.ts → 有输出,GetCascadeTrajectory 必须传 { cascadeId } 参数，不是空对象,P0,待开始
+23,P3:状态检测迁移,实现状态映射逻辑,"【做什么】将 RPC status 映射到 ResponsePhase 枚举
+【为什么】RPC 返回的状态字符串需要转换为本项目的枚举
+【具体操作】①在 getRpcStatus() 函数中添加映射逻辑 ②CASCADE_RUN_STATUS_IDLE → ResponsePhase.IDLE ③CASCADE_RUN_STATUS_RUNNING → ResponsePhase.GENERATING ④CASCADE_RUN_STATUS_ERROR → ResponsePhase.ERROR ⑤CASCADE_RUN_STATUS_UNLOADED → ResponsePhase.IDLE
+【验收标准】映射逻辑正确，编译通过",packages/server/src/monitor/phase.ts,22,grep ""CASCADE_RUN_STATUS"" packages/server/src/monitor/phase.ts → 有输出,状态映射要完整，不要漏掉任何一个状态,P0,待开始
+24,P3:状态检测迁移,修改 updatePhases 混合模式,"【做什么】修改 updatePhases() 函数，RPC 优先 + CDP 降级
+【为什么】状态检测要先尝试 RPC，失败时回退到 DOM 检测
+【具体操作】①找到 packages/server/src/monitor/phase.ts L280 的 updatePhases() 函数 ②在函数开头先调用 getRpcStatus() ③如果成功则使用 RPC 状态 ④catch 错误后继续执行原 DOM 检测逻辑 ⑤添加日志区分来源
+【验收标准】混合模式逻辑正确，编译通过",packages/server/src/monitor/phase.ts,23,grep ""Status from RPC"" packages/server/src/monitor/phase.ts → 有输出,不要删除 DOM 检测逻辑（L50-120），混合模式需要保留,P0,待开始
+25,P3:状态检测迁移,测试 RPC 状态检测,"【做什么】启动服务器，测试状态检测是否走 RPC
+【为什么】验证 RPC 状态检测正常工作
+【具体操作】①启动 AG 和服务器 ②发送消息 ③检查日志是否显示 ""Status from RPC: RUNNING""
+【验收标准】日志显示 RPC 状态，状态变化正确",无（运行时测试）,24,日志显示 ""Status from RPC"",如果 RPC 失败，检查 cascadeId 是否正确,P0,待开始
+26,P3:状态检测迁移,测试 CDP 状态降级,"【做什么】停止 LS，测试状态检测是否回退到 CDP
+【为什么】验证降级机制正常工作
+【具体操作】①停止 AG 实例 ②检查日志是否显示 ""Status from CDP""
+【验收标准】日志显示 CDP 状态，状态仍然正确",无（运行时测试）,25,日志显示 ""Status from CDP"",降级后状态应该仍能正确检测,P1,待开始
+27,P3:状态检测迁移,Phase 3 回归验证,"【做什么】验证 Phase 3 所有改动正确
+【为什么】确保状态检测功能正常，Phase 4 才能开始
+【具体操作】①执行 pnpm build ②测试 RPC 和 CDP 两种路径 ③执行 git add -A && git commit -m ""refactor: Phase 3 - 状态检测迁移""
+【验收标准】编译通过，两种路径都能检测状态",所有 Phase 3 涉及文件,25;26,pnpm build → 无错误; 两种路径测试通过,Phase 完成后必须 commit,P0,待开始
+28,P4:Delta Polling,创建 signals 模块,"【做什么】创建 rpc/signals.ts，导出 EventEmitter
+【为什么】REST 和 WebSocket 需要通过事件通信（激活信号）
+【具体操作】①创建 packages/server/src/rpc/signals.ts ②import { EventEmitter } from 'events' ③export const conversationSignals = new EventEmitter() ④添加类型定义
+【验收标准】文件存在，导出 conversationSignals",packages/server/src/rpc/signals.ts,27,grep ""export const conversationSignals"" packages/server/src/rpc/signals.ts → 有输出,EventEmitter 是 Node.js 内置模块，不需要安装,P0,待开始
+29,P4:Delta Polling,创建 ws-poller 模块框架,"【做什么】创建 rpc/ws-poller.ts，定义状态机类型
+【为什么】这是 delta polling 的核心模块
+【具体操作】①创建 packages/server/src/rpc/ws-poller.ts ②定义 type PollState = 'idle' | 'active' ③定义常量 ACTIVE_INTERVAL = 50, HEARTBEAT_INTERVAL = 5000, ACTIVE_OVERLAP = 20 ④从 porta/packages/proxy/src/ws.ts 参考结构
+【验收标准】文件存在，类型定义正确",packages/server/src/rpc/ws-poller.ts,28,grep ""type PollState"" packages/server/src/rpc/ws-poller.ts → 有输出,常量值必须准确：50ms, 5s, 20 步,P0,待开始
+30,P4:Delta Polling,实现状态机转换函数,"【做什么】实现 enterActive() 和 enterIdle() 函数
+【为什么】状态机的核心转换逻辑
+【具体操作】①在 ws-poller.ts 中实现 enterActive(guard = true) 函数 ②设置 pollState = 'active'，minActiveUntil = Date.now() + 5000 ③实现 enterIdle() 函数 ④设置 pollState = 'idle'，取消定时器 ⑤参考 porta/packages/proxy/src/ws.ts L249-279
+【验收标准】两个函数存在，逻辑正确",packages/server/src/rpc/ws-poller.ts,29,grep ""enterActive\|enterIdle"" packages/server/src/rpc/ws-poller.ts → 有输出,minActiveUntil 是防止过早去激活的保护期，必须设置,P0,待开始
+31,P4:Delta Polling,实现 fetchAndPush 函数,"【做什么】实现步骤获取和推送逻辑
+【为什么】这是轮询的核心，获取新步骤并推送到客户端
+【具体操作】①实现 async fetchAndPush(withOverlap: boolean) 函数 ②计算 fetchOffset = Math.max(minFetchOffset, lastStepCount - (withOverlap ? 20 : 0)) ③调用 rpcForConversation('GetCascadeTrajectorySteps', cascadeId, { cascadeId, stepOffset: fetchOffset }) ④推送到 WebSocket ⑤返回是否有新步骤
+【验收标准】函数存在，重叠窗口计算正确",packages/server/src/rpc/ws-poller.ts,30,grep ""fetchAndPush"" packages/server/src/rpc/ws-poller.ts → 有输出,fetchOffset 不能小于 minFetchOffset，否则会重复获取损坏步骤,P0,待开始
+32,P4:Delta Polling,实现轮询循环,"【做什么】实现 ACTIVE 和 IDLE 模式的轮询循环
+【为什么】这是持续获取步骤的机制
+【具体操作】①实现 scheduleNext(delay) 函数，ACTIVE 模式 50ms 轮询 ②实现 scheduleHeartbeat() 函数，IDLE 模式 5s 心跳 ③在 ACTIVE 模式调用 fetchAndPush(true) ④在 IDLE 模式调用 GetCascadeTrajectory 检查状态 ⑤参考 porta/packages/proxy/src/ws.ts L423-494
+【验收标准】两个函数存在，轮询间隔正确",packages/server/src/rpc/ws-poller.ts,31,grep ""scheduleNext\|scheduleHeartbeat"" packages/server/src/rpc/ws-poller.ts → 有输出,ACTIVE 模式必须调用 fetchAndPush(true) 启用重叠窗口,P0,待开始
+33,P4:Delta Polling,实现激活信号监听,"【做什么】监听 conversationSignals 的 activate 事件
+【为什么】REST 发送消息后需要通知 WebSocket 进入 ACTIVE 模式
+【具体操作】①在 ws-poller.ts 中 import { conversationSignals } from './signals' ②添加 conversationSignals.on('activate', onActivate) ③onActivate 函数中调用 enterActive()
+【验收标准】事件监听正确，编译通过",packages/server/src/rpc/ws-poller.ts,32,grep ""conversationSignals.on"" packages/server/src/rpc/ws-poller.ts → 有输出,必须在 WebSocket 连接时注册监听，断开时移除，否则内存泄漏,P0,待开始
+34,P4:Delta Polling,修改 interaction.ts 发送激活信号,"【做什么】在消息发送成功后发送激活信号
+【为什么】通知 WebSocket 进入 ACTIVE 模式开始轮询
+【具体操作】①打开 packages/server/src/api/interaction.ts ②在消息发送成功后（L29 之后）添加 conversationSignals.emit('activate', req.params.id) ③在文件顶部 import { conversationSignals } from '../rpc/signals'
+【验收标准】emit 调用存在，编译通过",packages/server/src/api/interaction.ts,33,grep ""conversationSignals.emit"" packages/server/src/api/interaction.ts → 有输出,只在成功后 emit，失败不要 emit,P0,待开始
+35,P4:Delta Polling,实现 WebSocket 消息格式,"【做什么】定义 WebSocket 消息类型并实现推送
+【为什么】前端需要接收结构化的步骤数据
+【具体操作】①在 packages/shared/src/types/ws.ts 添加 steps 消息类型 ②格式：{ type: 'steps', offset: number, steps: TrajectoryStep[] } ③在 ws-poller.ts 的 fetchAndPush 中推送该格式 ④同时保留 ready 和 status 消息
+【验收标准】消息类型定义完整，推送格式正确",packages/shared/src/types/ws.ts; packages/server/src/rpc/ws-poller.ts,31,grep ""type.*steps"" packages/shared/src/types/ws.ts → 有输出,offset 表示步骤起始索引，steps 是数组，不要搞反,P0,待开始
+36,P4:Delta Polling,Phase 4 回归验证,"【做什么】验证 Phase 4 所有改动正确
+【为什么】确保 delta polling 功能正常，Phase 5 才能开始
+【具体操作】①执行 pnpm build ②启动 AG 和服务器 ③用 wscat 连接 WebSocket ④发送消息，检查是否收到 steps 消息 ⑤执行 git add -A && git commit -m ""refactor: Phase 4 - Delta Polling""
+【验收标准】编译通过，WebSocket 正常推送步骤",所有 Phase 4 涉及文件,28;29;30;31;32;33;34;35,wscat -c ws://localhost:3563/api/conversations/{id}/ws → 收到 steps 消息,如果没收到消息，检查激活信号是否正确发送,P0,待开始
+37,P5:前端适配,导入 TrajectoryStep 类型,"【做什么】在前端导入 shared 包的 TrajectoryStep 类型
+【为什么】前端需要这个类型来解析步骤数据
+【具体操作】①打开 packages/web/src/types/index.ts ②添加 export { TrajectoryStep } from '@ag/shared' ③确认 @ag/web 的 package.json 依赖 @ag/shared
+【验收标准】类型导出正确，编译通过",packages/web/src/types/index.ts,3,grep ""TrajectoryStep"" packages/web/src/types/index.ts → 有输出,确保 web 包依赖 shared 包,P0,待开始
+38,P5:前端适配,修改 useStepsStream hook,"【做什么】在 useStepsStream hook 中添加 steps 消息处理
+【为什么】前端需要接收和解析后端推送的步骤数据
+【具体操作】①打开 packages/web/src/hooks/useStepsStream.ts ②在 WebSocket message 处理中添加 if (msg.type === 'steps') 分支 ③维护 steps 数组，根据 offset 合并新步骤 ④注意：offset=10, steps=[a,b,c] 表示索引 10-12
+【验收标准】消息处理逻辑正确，编译通过",packages/web/src/hooks/useStepsStream.ts,37,grep ""type === 'steps'"" packages/web/src/hooks/useStepsStream.ts → 有输出,步骤合并时，重叠部分用新数据覆盖旧数据，不要追加,P0,待开始
+39,P5:前端适配,实现步骤合并逻辑,"【做什么】实现步骤数组的增量合并
+【为什么】WebSocket 推送的是增量数据，需要合并到现有数组
+【具体操作】①在 useStepsStream 中维护 const [steps, setSteps] = useState<TrajectoryStep[]>([]) ②收到新消息时，计算 endOffset = msg.offset + msg.steps.length ③如果 msg.offset < steps.length，替换重叠部分 ④否则追加
+【验收标准】合并逻辑正确，无重复步骤",packages/web/src/hooks/useStepsStream.ts,38,grep ""setSteps"" packages/web/src/hooks/useStepsStream.ts → 有输出,重叠窗口的步骤要替换不要追加，否则会有重复,P0,待开始
+40,P5:前端适配,修改 ChatPanel 渲染逻辑,"【做什么】在 ChatPanel 中渲染 TrajectoryStep 数组
+【为什么】前端需要显示步骤内容
+【具体操作】①打开 packages/web/src/components/ChatPanel.tsx ②添加对 TrajectoryStep[] 的渲染逻辑 ③根据 step.type 显示不同内容（USER_INPUT, PLANNER_RESPONSE, TOOL_USE 等） ④保留对旧 snapshot_update 的兼容
+【验收标准】UI 正常显示步骤，编译通过",packages/web/src/components/ChatPanel.tsx,39,grep ""TrajectoryStep"" packages/web/src/components/ChatPanel.tsx → 有输出,不要删除 Shadow DOM 渲染逻辑，需要兼容,P0,待开始
+41,P5:前端适配,测试前端显示,"【做什么】启动前端，测试步骤是否正常显示
+【为什么】验证前端适配正确
+【具体操作】①启动 AG 和服务器 ②启动前端 pnpm dev:web ③浏览器打开，发送消息 ④检查 UI 是否显示步骤内容
+【验收标准】UI 正常显示，无报错",无（运行时测试）,40,浏览器 console 无错误，UI 显示步骤,如果显示空白，检查步骤合并逻辑是否正确,P0,待开始
+42,P5:前端适配,Phase 5 回归验证,"【做什么】验证 Phase 5 所有改动正确
+【为什么】确保前端适配完成，Phase 6 才能开始
+【具体操作】①执行 pnpm build ②测试新旧两种格式 ③执行 git add -A && git commit -m ""refactor: Phase 5 - 前端适配""
+【验收标准】编译通过，UI 正常显示",所有 Phase 5 涉及文件,41,pnpm build → 无错误; UI 测试通过,Phase 完成后必须 commit,P0,待开始
+43,P6:OpenAI API优化,修改 openai-compat 消息发送,"【做什么】将 OpenAI API 的消息发送改为 RPC
+【为什么】提升 OpenAI API 性能
+【具体操作】①打开 packages/server/src/api/openai-compat.ts ②找到 L164 的 injectMessage() 调用 ③改为 sendMessageWithFallback() ④在文件顶部添加 import
+【验收标准】代码修改正确，编译通过",packages/server/src/api/openai-compat.ts,21,grep ""sendMessageWithFallback"" packages/server/src/api/openai-compat.ts → 有输出,无,P1,待开始
+44,P6:OpenAI API优化,修改响应提取逻辑,"【做什么】将响应提取从 DOM 改为 RPC 步骤
+【为什么】RPC 步骤数据更可靠
+【具体操作】①删除 L152 的 CHAT_TEXT_SCRIPT 调用 ②改为轮询 GetCascadeTrajectorySteps ③提取 type === 'PLANNER_RESPONSE' 的步骤 ④拼接 content.text 字段
+【验收标准】响应提取逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,43,grep ""PLANNER_RESPONSE"" packages/server/src/api/openai-compat.ts → 有输出,PLANNER_RESPONSE 步骤可能有多个，需要按顺序拼接,P1,待开始
+45,P6:OpenAI API优化,修改完成检测,"【做什么】将完成检测从 DOM 改为 RPC status
+【为什么】RPC status 更可靠
+【具体操作】①找到 L200+ 的完成检测逻辑 ②改为检查 GetCascadeTrajectory 的 status 字段 ③status === 'CASCADE_RUN_STATUS_IDLE' 且无新步骤 → 完成
+【验收标准】完成检测逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,44,grep ""CASCADE_RUN_STATUS_IDLE"" packages/server/src/api/openai-compat.ts → 有输出,完成检测要同时检查 status 和步骤数，避免过早完成,P1,待开始
+46,P6:OpenAI API优化,测试 OpenAI API,"【做什么】测试 OpenAI API 是否正常工作
+【为什么】验证改造正确
+【具体操作】①启动 AG 和服务器 ②调用 curl -X POST http://localhost:3563/v1/chat/completions -d '{""messages"":[{""role"":""user"",""content"":""test""}],""stream"":true}' ③检查是否返回 SSE 流
+【验收标准】API 正常响应，流式输出正确",无（运行时测试）,45,curl 返回 SSE 流，无报错,如果流式响应中断，检查完成检测逻辑,P1,待开始
+47,P6:OpenAI API优化,Phase 6 回归验证,"【做什么】验证 Phase 6 所有改动正确
+【为什么】确保 OpenAI API 优化完成，Phase 7 才能开始
+【具体操作】①执行 pnpm build ②测试流式和非流式响应 ③执行 git add -A && git commit -m ""refactor: Phase 6 - OpenAI API 优化""
+【验收标准】编译通过，API 测试通过",所有 Phase 6 涉及文件,46,pnpm build → 无错误; API 测试通过,Phase 完成后必须 commit,P1,待开始
+48,P7:清理与配置化,删除旧发现逻辑,"【做什么】删除 loop/discovery.ts
+【为什么】已被 rpc/discovery.ts 替代，不再需要
+【具体操作】①执行 rm packages/server/src/loop/discovery.ts ②检查是否有其他文件 import 它 ③如果有则删除 import
+【验收标准】文件不存在，编译通过",packages/server/src/loop/discovery.ts,47,ls packages/server/src/loop/discovery.ts → 文件不存在,删除前必须确认没有其他文件 import 它，否则编译会报错,P1,待开始
+49,P7:清理与配置化,精简快照循环,"【做什么】在 snapshot.ts 添加配置检查
+【为什么】让快照功能可配置
+【具体操作】①打开 packages/server/src/loop/snapshot.ts ②在函数开头添加 if (!config.cdp.enableSnapshot) return ③在 config.ts 添加 cdp.enableSnapshot 配置项
+【验收标准】配置项生效，编译通过",packages/server/src/loop/snapshot.ts; packages/server/src/config.ts,48,grep ""enableSnapshot"" packages/server/src/config.ts → 有输出,默认值设为 false，因为 RPC 已经提供数据,P1,待开始
+50,P7:清理与配置化,添加完整配置项,"【做什么】在 config.ts 添加所有 RPC 和 CDP 配置
+【为什么】让所有功能可配置
+【具体操作】①打开 packages/server/src/config.ts ②添加 rpc 配置块（enabled, fallbackToCDP, discoveryInterval, activePollInterval, idlePollInterval） ③添加 cdp 配置块（enabled, enableSnapshot, ports） ④设置合理的默认值
+【验收标准】配置项完整，编译通过",packages/server/src/config.ts,49,grep ""rpc.*enabled\|cdp.*enabled"" packages/server/src/config.ts → 有输出,默认值：rpc.enabled=true, cdp.enabled=true, cdp.enableSnapshot=false,P1,待开始
+51,P7:清理与配置化,更新 README 文档,"【做什么】在 README.md 添加 RPC 配置说明
+【为什么】用户需要知道如何配置
+【具体操作】①打开 README.md ②添加 Configuration 章节 ③说明 rpc 和 cdp 配置项 ④提供配置示例
+【验收标准】文档更新完整",README.md,50,grep ""RPC"" README.md → 有输出,配置示例要完整，包含所有配置项,P2,待开始
+52,P7:清理与配置化,测试纯 RPC 模式,"【做什么】测试关闭 CDP 快照后是否正常工作
+【为什么】验证 RPC 模式独立可用
+【具体操作】①修改 config.json，设置 cdp.enableSnapshot: false ②启动服务器 ③测试所有功能
+【验收标准】功能正常，无报错",config.json,51,日志显示 ""Snapshot disabled"",如果功能异常，检查是否有代码仍依赖快照,P1,待开始
+53,P7:清理与配置化,测试纯 CDP 模式,"【做什么】测试关闭 RPC 后是否回退到 CDP
+【为什么】验证降级机制完整
+【具体操作】①修改 config.json，设置 rpc.enabled: false ②启动服务器 ③测试所有功能
+【验收标准】功能正常，全部走 CDP",config.json,52,日志显示所有操作都走 CDP,如果功能异常，检查降级逻辑是否完整,P1,待开始
+54,P7:清理与配置化,Phase 7 回归验证,"【做什么】验证 Phase 7 所有改动正确
+【为什么】确保清理和配置化完成
+【具体操作】①执行 pnpm build ②测试两种模式 ③执行 git add -A && git commit -m ""refactor: Phase 7 - 清理与配置化""
+【验收标准】编译通过，两种模式都正常",所有 Phase 7 涉及文件,52;53,pnpm build → 无错误; 两种模式测试通过,Phase 完成后必须 commit,P0,待开始
+55,最终验收,运行完整测试套件,"【做什么】运行所有测试，确保无回归
+【为什么】最终验收，确保所有功能正常
+【具体操作】①执行 pnpm test ②检查测试通过率 ③检查覆盖率是否 >80%
+【验收标准】所有测试通过，覆盖率达标",所有文件,54,pnpm test → 所有测试通过,如果测试失败，检查是否有遗漏的改动,P0,待开始
+56,最终验收,性能基准测试,"【做什么】对比 RPC 和 CDP 的性能
+【为什么】验证性能提升达到预期
+【具体操作】①测量消息发送延迟（RPC vs CDP） ②测量 WebSocket 带宽（delta vs 快照） ③记录结果
+【验收标准】RPC 延迟 <100ms，带宽降低 >80%",无（性能测试）,55,延迟和带宽符合预期,如果性能未达标，检查轮询间隔和重叠窗口配置,P1,待开始
+57,最终验收,生成最终报告,"【做什么】总结所有改动和成果
+【为什么】交付文档
+【具体操作】①列出所有改动的文件 ②总结每个 Phase 的成果 ③列出风险点和注意事项 ④记录性能数据
+【验收标准】报告完整",无（文档）,56,报告包含所有关键信息,无,P2,待开始

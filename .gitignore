@@ -37,7 +37,7 @@ diagnose.mjs
 # Push notification subscriptions
 .push-subscriptions.json
 .gitnexus
-docs/
+# docs/
 
 # AI agent config
 .claude/
