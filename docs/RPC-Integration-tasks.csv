@@ -146,27 +146,27 @@
 37,P5:前端适配,导入 TrajectoryStep 类型,"【做什么】在前端导入 shared 包的 TrajectoryStep 类型
 【为什么】前端需要这个类型来解析步骤数据
 【具体操作】①打开 packages/web/src/types/index.ts ②添加 export { TrajectoryStep } from '@ag/shared' ③确认 @ag/web 的 package.json 依赖 @ag/shared
-【验收标准】类型导出正确，编译通过",packages/web/src/types/index.ts,3,grep ""TrajectoryStep"" packages/web/src/types/index.ts → 有输出,确保 web 包依赖 shared 包,P0,待开始
+【验收标准】类型导出正确，编译通过",packages/web/src/types/index.ts,3,grep ""TrajectoryStep"" packages/web/src/types/index.ts → 有输出,确保 web 包依赖 shared 包,P0,已完成
 38,P5:前端适配,修改 useStepsStream hook,"【做什么】在 useStepsStream hook 中添加 steps 消息处理
 【为什么】前端需要接收和解析后端推送的步骤数据
 【具体操作】①打开 packages/web/src/hooks/useStepsStream.ts ②在 WebSocket message 处理中添加 if (msg.type === 'steps') 分支 ③维护 steps 数组，根据 offset 合并新步骤 ④注意：offset=10, steps=[a,b,c] 表示索引 10-12
-【验收标准】消息处理逻辑正确，编译通过",packages/web/src/hooks/useStepsStream.ts,37,grep ""type === 'steps'"" packages/web/src/hooks/useStepsStream.ts → 有输出,步骤合并时，重叠部分用新数据覆盖旧数据，不要追加,P0,待开始
+【验收标准】消息处理逻辑正确，编译通过",packages/web/src/hooks/useStepsStream.ts,37,grep ""type === 'steps'"" packages/web/src/hooks/useStepsStream.ts → 有输出,步骤合并时，重叠部分用新数据覆盖旧数据，不要追加,P0,已完成
 39,P5:前端适配,实现步骤合并逻辑,"【做什么】实现步骤数组的增量合并
 【为什么】WebSocket 推送的是增量数据，需要合并到现有数组
 【具体操作】①在 useStepsStream 中维护 const [steps, setSteps] = useState<TrajectoryStep[]>([]) ②收到新消息时，计算 endOffset = msg.offset + msg.steps.length ③如果 msg.offset < steps.length，替换重叠部分 ④否则追加
-【验收标准】合并逻辑正确，无重复步骤",packages/web/src/hooks/useStepsStream.ts,38,grep ""setSteps"" packages/web/src/hooks/useStepsStream.ts → 有输出,重叠窗口的步骤要替换不要追加，否则会有重复,P0,待开始
+【验收标准】合并逻辑正确，无重复步骤",packages/web/src/hooks/useStepsStream.ts,38,grep ""setSteps"" packages/web/src/hooks/useStepsStream.ts → 有输出,重叠窗口的步骤要替换不要追加，否则会有重复,P0,已完成
 40,P5:前端适配,修改 ChatPanel 渲染逻辑,"【做什么】在 ChatPanel 中渲染 TrajectoryStep 数组
 【为什么】前端需要显示步骤内容
 【具体操作】①打开 packages/web/src/components/ChatPanel.tsx ②添加对 TrajectoryStep[] 的渲染逻辑 ③根据 step.type 显示不同内容（USER_INPUT, PLANNER_RESPONSE, TOOL_USE 等） ④保留对旧 snapshot_update 的兼容
-【验收标准】UI 正常显示步骤，编译通过",packages/web/src/components/ChatPanel.tsx,39,grep ""TrajectoryStep"" packages/web/src/components/ChatPanel.tsx → 有输出,不要删除 Shadow DOM 渲染逻辑，需要兼容,P0,待开始
+【验收标准】UI 正常显示步骤，编译通过",packages/web/src/components/ChatPanel.tsx,39,grep ""TrajectoryStep"" packages/web/src/components/ChatPanel.tsx → 有输出,不要删除 Shadow DOM 渲染逻辑，需要兼容,P0,已完成
 41,P5:前端适配,测试前端显示,"【做什么】启动前端，测试步骤是否正常显示
 【为什么】验证前端适配正确
 【具体操作】①启动 AG 和服务器 ②启动前端 pnpm dev:web ③浏览器打开，发送消息 ④检查 UI 是否显示步骤内容
-【验收标准】UI 正常显示，无报错",无（运行时测试）,40,浏览器 console 无错误，UI 显示步骤,如果显示空白，检查步骤合并逻辑是否正确,P0,待开始
+【验收标准】UI 正常显示，无报错",无（运行时测试）,40,浏览器 console 无错误，UI 显示步骤,如果显示空白，检查步骤合并逻辑是否正确,P0,已完成
 42,P5:前端适配,Phase 5 回归验证,"【做什么】验证 Phase 5 所有改动正确
 【为什么】确保前端适配完成，Phase 6 才能开始
 【具体操作】①执行 pnpm build ②测试新旧两种格式 ③执行 git add -A && git commit -m ""refactor: Phase 5 - 前端适配""
-【验收标准】编译通过，UI 正常显示",所有 Phase 5 涉及文件,41,pnpm build → 无错误; UI 测试通过,Phase 完成后必须 commit,P0,待开始
+【验收标准】编译通过，UI 正常显示",所有 Phase 5 涉及文件,41,pnpm build → 无错误; UI 测试通过,Phase 完成后必须 commit,P0,已完成
 43,P6:OpenAI API优化,修改 openai-compat 消息发送,"【做什么】将 OpenAI API 的消息发送改为 RPC
 【为什么】提升 OpenAI API 性能
 【具体操作】①打开 packages/server/src/api/openai-compat.ts ②找到 L164 的 injectMessage() 调用 ③改为 sendMessageWithFallback() ④在文件顶部添加 import

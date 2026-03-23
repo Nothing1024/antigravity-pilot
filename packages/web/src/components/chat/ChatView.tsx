@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { useCascadeStore } from "../../stores/cascadeStore";
 import { useUIStore } from "../../stores/uiStore";
 import { apiUrl } from "../../services/api";
-import { ChatViewport } from "./ChatViewport";
+import { ChatPanel } from "../ChatPanel";
 import { MessageInput } from "./MessageInput";
 import { FileChangesBar } from "./FileChangesBar";
 import type { FileChange } from "./FileChangesBar";
@@ -22,6 +22,10 @@ type ToolbarPopup = {
 export function ChatView() {
   const cascades = useCascadeStore((s) => s.cascades);
   const currentId = useCascadeStore((s) => s.currentId);
+  const debugCascadeId = import.meta.env.DEV
+    ? ((import.meta.env.VITE_DEBUG_CASCADE_ID as string | undefined) ?? null)
+    : null;
+  const activeId = currentId || debugCascadeId;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [launching, setLaunching] = useState(false);
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
@@ -74,7 +78,7 @@ export function ChatView() {
 
   const handleToolbarPopupSelect = useCallback(
     async (item: PopupItem) => {
-      const id = currentId;
+      const id = activeId;
       const triggerIndex = toolbarPopup.triggerIndex;
       if (!id || triggerIndex === null) return;
       setToolbarPopup({ open: false, items: [], triggerIndex: null, anchor: null });
@@ -88,11 +92,11 @@ export function ChatView() {
         // ignore
       }
     },
-    [currentId, toolbarPopup.triggerIndex]
+    [activeId, toolbarPopup.triggerIndex]
   );
 
   const handleToolbarPopupClose = useCallback(async () => {
-    const id = currentId;
+    const id = activeId;
     setToolbarPopup({ open: false, items: [], triggerIndex: null, anchor: null });
     if (!id) return;
     try {
@@ -104,10 +108,10 @@ export function ChatView() {
     } catch {
       // ignore
     }
-  }, [currentId]);
+  }, [activeId]);
 
   // Empty state
-  if (cascades.length === 0) {
+  if (cascades.length === 0 && !activeId) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-muted">
@@ -160,12 +164,18 @@ export function ChatView() {
     <div className="flex-1 flex flex-col overflow-hidden relative">
       <div ref={scrollRef} className="flex-1 overflow-y-auto w-full">
         <div className="max-w-4xl mx-auto min-h-full px-4 sm:px-6">
-          <ChatViewport cascadeId={currentId} onContentUpdate={scrollToBottomIfNeeded} onFileChanges={setFileChanges} onToolbarButtons={setToolbarButtons} onActionButtons={setActionButtons} />
+          <ChatPanel
+            cascadeId={activeId}
+            onContentUpdate={scrollToBottomIfNeeded}
+            onFileChanges={setFileChanges}
+            onToolbarButtons={setToolbarButtons}
+            onActionButtons={setActionButtons}
+          />
         </div>
       </div>
-      <FileChangesBar cascadeId={currentId} files={fileChanges} actions={actionButtons} />
-      <ToolbarButtonsBar cascadeId={currentId} buttons={toolbarButtons} onPopup={handleToolbarPopup} />
-      <MessageInput cascadeId={currentId} />
+      <FileChangesBar cascadeId={activeId} files={fileChanges} actions={actionButtons} />
+      <ToolbarButtonsBar cascadeId={activeId} buttons={toolbarButtons} onPopup={handleToolbarPopup} />
+      <MessageInput cascadeId={activeId} />
       <PopupBubble
         open={toolbarPopup.open}
         items={toolbarPopup.items}

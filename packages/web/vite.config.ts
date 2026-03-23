@@ -8,6 +8,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Conversation step streaming WS (Phase 4/5): /api/conversations/:id/ws
+      '/api/conversations': {
+        target: 'http://localhost:3563',
+        ws: true,
+        changeOrigin: true
+      },
       // API routes
       '/api': {
         target: 'http://localhost:3563',

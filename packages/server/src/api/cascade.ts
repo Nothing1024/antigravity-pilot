@@ -28,7 +28,7 @@ cascadeRouter.get("/cascades", (req, res) => {
 
 cascadeRouter.get("/snapshot/:id", (req, res) => {
   const c = cascadeStore.get(req.params.id);
-  if (!c || !c.snapshot) return res.status(404).json({ error: "Not found" });
+  if (!c || !c.snapshot) return res.json({ error: "Not found" });
   res.json(c.snapshot);
 });
 
@@ -346,7 +346,7 @@ cascadeRouter.post("/api/push/unsubscribe", (req, res) => {
 
 cascadeRouter.get("/styles/:id", (req, res) => {
   const c = cascadeStore.get(req.params.id);
-  if (!c) return res.status(404).json({ error: "Not found" });
+  if (!c) return res.json({ error: "Not found" });
   res.json({ css: c.css || "", computedVars: c.computedVars || {} });
 });
 

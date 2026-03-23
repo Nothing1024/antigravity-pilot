@@ -54,9 +54,14 @@ function App() {
 
   // Check if already authenticated by probing a protected endpoint
   useEffect(() => {
-    fetch(apiUrl("/cascades"), { credentials: "include" })
-      .then((res) => {
-        setAuthState(res.ok ? "authenticated" : "unauthenticated");
+    fetch(apiUrl("/api/auth-status"), { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) {
+          setAuthState("unauthenticated");
+          return;
+        }
+        const data = (await res.json()) as { authenticated?: boolean };
+        setAuthState(data.authenticated ? "authenticated" : "unauthenticated");
       })
       .catch(() => {
         setAuthState("unauthenticated");

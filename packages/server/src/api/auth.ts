@@ -25,6 +25,20 @@ authRouter.post("/api/login", (req, res) => {
 });
 
 /**
+ * Public auth probe (always 200).
+ * Avoids noisy 401s during the web app's initial boot.
+ */
+authRouter.get("/api/auth-status", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const cookieAuthed = verifyToken(cookies.auth);
+
+  const bearer = extractBearerToken(req.headers.authorization);
+  const bearerAuthed = bearer ? (verifyApiKey(bearer) || verifyToken(bearer)) : false;
+
+  res.json({ authenticated: cookieAuthed || bearerAuthed });
+});
+
+/**
  * Check if a Bearer token matches any configured API key.
  */
 function verifyApiKey(bearerToken: string): boolean {

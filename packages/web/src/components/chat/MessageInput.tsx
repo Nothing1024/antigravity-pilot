@@ -130,6 +130,7 @@ export function MessageInput({ cascadeId }: Props) {
           {/* Textarea */}
           <textarea
             ref={textareaRef}
+            name="message"
             className="flex-1 min-h-[42px] max-h-[160px] bg-transparent px-4 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground/35 focus:outline-none resize-none disabled:cursor-not-allowed"
             rows={1}
             placeholder={cascadeId ? t("input.placeholder") : t("input.waiting")}
