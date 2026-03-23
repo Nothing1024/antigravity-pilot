@@ -13,6 +13,7 @@
 import { ResponsePhase } from "@ag/shared";
 
 import { eventBus } from "../events/bus";
+import { rpcForConversation } from "../rpc/routing";
 import { cascadeStore } from "../store/cascades";
 
 // --- Phase Detection Script (injected into Antigravity DOM) ---
@@ -318,6 +319,69 @@ async function extractResponseText(
   }
 }
 
+type RpcCascadeTrajectory = {
+  status?: string;
+};
+
+async function getRpcStatus(cascadeId: string): Promise<string> {
+  const trajectory = await rpcForConversation<RpcCascadeTrajectory>(
+    "GetCascadeTrajectory",
+    cascadeId,
+    { cascadeId },
+    undefined,
+    true,
+  );
+
+  const status = trajectory.status;
+  if (!status) throw new Error("RPC GetCascadeTrajectory missing status");
+  return status;
+}
+
+function mapRpcStatusToPhase(status: string): ResponsePhase {
+  switch (status) {
+    case "CASCADE_RUN_STATUS_IDLE":
+      return ResponsePhase.IDLE;
+    case "CASCADE_RUN_STATUS_RUNNING":
+      return ResponsePhase.GENERATING;
+    case "CASCADE_RUN_STATUS_ERROR":
+      return ResponsePhase.ERROR;
+    case "CASCADE_RUN_STATUS_UNLOADED":
+      return ResponsePhase.IDLE;
+    default:
+      return ResponsePhase.IDLE;
+  }
+}
+
+function applyPhaseChange(
+  cascadeId: string,
+  newPhase: ResponsePhase,
+  source: "RPC" | "CDP",
+): void {
+  const c = cascadeStore.get(cascadeId);
+  if (!c) return;
+
+  const oldPhase = c.phase;
+  if (newPhase === oldPhase) return;
+
+  c.phase = newPhase;
+  c.lastPhaseChange = Date.now();
+
+  console.log(
+    `🔄 Phase change (${source}) for "${c.metadata.chatTitle}": ${oldPhase} → ${newPhase}`,
+  );
+
+  eventBus.emit("phase_change", {
+    cascadeId,
+    phase: newPhase,
+    previousPhase: oldPhase,
+    timestamp: Date.now(),
+  });
+
+  if (newPhase === ResponsePhase.IDLE || newPhase === ResponsePhase.THINKING) {
+    c.responseText = "";
+  }
+}
+
 /**
  * Run phase detection for all connected cascades.
  * Called from the snapshot loop (~1s interval).
@@ -325,6 +389,32 @@ async function extractResponseText(
 export async function updatePhases(): Promise<void> {
   const cascades = cascadeStore.getAll();
   await Promise.all(
-    cascades.map((c) => detectPhase(c.id).catch(() => {}))
+    cascades.map(async (c) => {
+      try {
+        const status = await getRpcStatus(c.id);
+        console.log(`Status from RPC: ${status}`);
+
+        const rpcPhase = mapRpcStatusToPhase(status);
+
+        if (
+          rpcPhase === ResponsePhase.GENERATING ||
+          rpcPhase === ResponsePhase.ERROR
+        ) {
+          applyPhaseChange(c.id, rpcPhase, "RPC");
+
+          if (rpcPhase === ResponsePhase.GENERATING && c.cdp.rootContextId) {
+            await extractResponseText(c.id, c.cdp.rootContextId);
+          }
+          return;
+        }
+
+        // Fine-grained states (THINKING/APPROVAL_PENDING/COMPLETED/...) still
+        // need CDP. Use DOM heuristics only when RPC is not definitively RUNNING/ERROR.
+        await detectPhase(c.id);
+      } catch {
+        console.log(`Status from CDP: ${c.id}`);
+        await detectPhase(c.id);
+      }
+    }),
   );
 }
