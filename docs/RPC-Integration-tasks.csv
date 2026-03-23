@@ -2,23 +2,23 @@
 1,P0:准备工作,创建 RPC 目录结构,"【做什么】创建 rpc/ 目录和 platform/ 子目录
 【为什么】后续所有 RPC 模块都要放在这个目录下，必须先建好
 【具体操作】①执行 mkdir -p packages/server/src/rpc/platform ②执行 ls packages/server/src/rpc 确认目录存在
-【验收标准】目录存在且可访问",packages/server/src/rpc/,无,ls packages/server/src/rpc → 显示 platform 目录,无,P0,待开始
+【验收标准】目录存在且可访问",packages/server/src/rpc/,无,ls packages/server/src/rpc → 显示 platform 目录,无,P0,已完成
 2,P0:准备工作,定义 LSInstance 类型,"【做什么】创建 rpc/types.ts，定义 LSInstance 接口
 【为什么】所有 RPC 模块都要用这个类型，必须先定义
 【具体操作】①创建 packages/server/src/rpc/types.ts ②从 porta/packages/proxy/src/discovery.ts L25-34 复制 LSInstance 接口定义 ③确保包含 pid, httpsPort, httpPort, lspPort, csrfToken, workspaceId?, source 字段
-【验收标准】文件存在，TypeScript 编译通过",packages/server/src/rpc/types.ts,1,grep ""interface LSInstance"" packages/server/src/rpc/types.ts → 有输出,字段必须完整，不要漏掉 workspaceId? 和 source,P0,待开始
+【验收标准】文件存在，TypeScript 编译通过",packages/server/src/rpc/types.ts,1,grep ""interface LSInstance"" packages/server/src/rpc/types.ts → 有输出,字段必须完整，不要漏掉 workspaceId? 和 source,P0,已完成
 3,P0:准备工作,定义 TrajectoryStep 类型,"【做什么】在 shared 包定义 TrajectoryStep 接口
 【为什么】前后端都要用这个类型表示步骤数据
 【具体操作】①创建 packages/shared/src/types/trajectory.ts ②定义 TrajectoryStep 接口，包含 stepId, type, status, content?, timestamp?, clientMessageId?, _corrupted? 字段 ③在 packages/shared/src/index.ts 导出该类型
-【验收标准】类型定义完整，pnpm build 编译通过",packages/shared/src/types/trajectory.ts; packages/shared/src/index.ts,无,pnpm build → 编译通过,不要忘记在 index.ts 导出，否则其他包无法 import,P0,待开始
+【验收标准】类型定义完整，pnpm build 编译通过",packages/shared/src/types/trajectory.ts; packages/shared/src/index.ts,无,pnpm build → 编译通过,不要忘记在 index.ts 导出，否则其他包无法 import,P0,已完成
 4,P0:准备工作,验证依赖关系,"【做什么】确认 @ag/server 依赖 @ag/shared
 【为什么】server 要 import shared 的类型，必须有依赖关系
 【具体操作】①打开 packages/server/package.json ②检查 dependencies 中是否有 ""@ag/shared"": ""workspace:*"" ③如果没有则添加 ④执行 pnpm install
-【验收标准】grep 有输出且 pnpm install 无报错",packages/server/package.json,无,grep ""@ag/shared"" packages/server/package.json → 有输出,workspace:* 表示使用本地 workspace 版本，不要写具体版本号,P1,待开始
+【验收标准】grep 有输出且 pnpm install 无报错",packages/server/package.json,无,grep ""@ag/shared"" packages/server/package.json → 有输出,workspace:* 表示使用本地 workspace 版本，不要写具体版本号,P1,已完成
 5,P0:准备工作,Phase 0 回归验证,"【做什么】验证 Phase 0 所有改动编译通过
 【为什么】确保基础结构正确，Phase 1 才能开始
 【具体操作】①执行 pnpm build ②检查是否有编译错误 ③执行 git status 查看改动文件
-【验收标准】编译通过，新增 3 个文件，无其他改动",所有 Phase 0 涉及文件,1;2;3;4,pnpm build → 无错误,如果编译失败，检查类型导出是否正确,P0,待开始
+【验收标准】编译通过，新增 3 个文件，无其他改动",所有 Phase 0 涉及文件,1;2;3;4,pnpm build → 无错误,如果编译失败，检查类型导出是否正确,P0,已完成
 6,P1:RPC基础设施,复制平台适配器目录,"【做什么】从 porta 复制整个 platform/ 目录
 【为什么】LS 发现需要 OS 特定的进程扫描逻辑
 【具体操作】①cd /Users/nothing/workspace/antigravity/porta ②cp -r packages/proxy/src/platform /Users/nothing/workspace/antigravity/antigravity-pilot/packages/server/src/rpc/ ③验证文件数量
