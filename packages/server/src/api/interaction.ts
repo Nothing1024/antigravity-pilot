@@ -3,6 +3,7 @@ import express from "express";
 import { captureHTML } from "../capture/html";
 import { injectMessage } from "../cdp/inject";
 import { sendMessageWithFallback } from "../rpc/fallback";
+import { conversationSignals } from "../rpc/signals";
 import { cascadeStore } from "../store/cascades";
 import { hashString } from "../utils/hash";
 import { broadcast } from "../ws/broadcast";
@@ -28,8 +29,12 @@ interactionRouter.post("/send/:id", async (req, res) => {
   // See helper below.
 
   const result = await sendMessageWithFallback(req.params.id, req.body.message);
-  if (result.ok) res.json(result);
-  else res.status(500).json(result);
+  if (result.ok) {
+    conversationSignals.emit("activate", req.params.id);
+    res.json(result);
+  } else {
+    res.status(500).json(result);
+  }
 });
 
 // Click passthrough: forward a click to the IDE via CDP (pure click, no snapshot)

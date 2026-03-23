@@ -110,39 +110,39 @@
 28,P4:Delta Polling,创建 signals 模块,"【做什么】创建 rpc/signals.ts，导出 EventEmitter
 【为什么】REST 和 WebSocket 需要通过事件通信（激活信号）
 【具体操作】①创建 packages/server/src/rpc/signals.ts ②import { EventEmitter } from 'events' ③export const conversationSignals = new EventEmitter() ④添加类型定义
-【验收标准】文件存在，导出 conversationSignals",packages/server/src/rpc/signals.ts,27,grep ""export const conversationSignals"" packages/server/src/rpc/signals.ts → 有输出,EventEmitter 是 Node.js 内置模块，不需要安装,P0,待开始
+【验收标准】文件存在，导出 conversationSignals",packages/server/src/rpc/signals.ts,27,grep ""export const conversationSignals"" packages/server/src/rpc/signals.ts → 有输出,EventEmitter 是 Node.js 内置模块，不需要安装,P0,已完成
 29,P4:Delta Polling,创建 ws-poller 模块框架,"【做什么】创建 rpc/ws-poller.ts，定义状态机类型
 【为什么】这是 delta polling 的核心模块
 【具体操作】①创建 packages/server/src/rpc/ws-poller.ts ②定义 type PollState = 'idle' | 'active' ③定义常量 ACTIVE_INTERVAL = 50, HEARTBEAT_INTERVAL = 5000, ACTIVE_OVERLAP = 20 ④从 porta/packages/proxy/src/ws.ts 参考结构
-【验收标准】文件存在，类型定义正确",packages/server/src/rpc/ws-poller.ts,28,grep ""type PollState"" packages/server/src/rpc/ws-poller.ts → 有输出,常量值必须准确：50ms, 5s, 20 步,P0,待开始
+【验收标准】文件存在，类型定义正确",packages/server/src/rpc/ws-poller.ts,28,grep ""type PollState"" packages/server/src/rpc/ws-poller.ts → 有输出,常量值必须准确：50ms, 5s, 20 步,P0,已完成
 30,P4:Delta Polling,实现状态机转换函数,"【做什么】实现 enterActive() 和 enterIdle() 函数
 【为什么】状态机的核心转换逻辑
 【具体操作】①在 ws-poller.ts 中实现 enterActive(guard = true) 函数 ②设置 pollState = 'active'，minActiveUntil = Date.now() + 5000 ③实现 enterIdle() 函数 ④设置 pollState = 'idle'，取消定时器 ⑤参考 porta/packages/proxy/src/ws.ts L249-279
-【验收标准】两个函数存在，逻辑正确",packages/server/src/rpc/ws-poller.ts,29,grep ""enterActive\|enterIdle"" packages/server/src/rpc/ws-poller.ts → 有输出,minActiveUntil 是防止过早去激活的保护期，必须设置,P0,待开始
+【验收标准】两个函数存在，逻辑正确",packages/server/src/rpc/ws-poller.ts,29,grep ""enterActive\|enterIdle"" packages/server/src/rpc/ws-poller.ts → 有输出,minActiveUntil 是防止过早去激活的保护期，必须设置,P0,已完成
 31,P4:Delta Polling,实现 fetchAndPush 函数,"【做什么】实现步骤获取和推送逻辑
 【为什么】这是轮询的核心，获取新步骤并推送到客户端
 【具体操作】①实现 async fetchAndPush(withOverlap: boolean) 函数 ②计算 fetchOffset = Math.max(minFetchOffset, lastStepCount - (withOverlap ? 20 : 0)) ③调用 rpcForConversation('GetCascadeTrajectorySteps', cascadeId, { cascadeId, stepOffset: fetchOffset }) ④推送到 WebSocket ⑤返回是否有新步骤
-【验收标准】函数存在，重叠窗口计算正确",packages/server/src/rpc/ws-poller.ts,30,grep ""fetchAndPush"" packages/server/src/rpc/ws-poller.ts → 有输出,fetchOffset 不能小于 minFetchOffset，否则会重复获取损坏步骤,P0,待开始
+【验收标准】函数存在，重叠窗口计算正确",packages/server/src/rpc/ws-poller.ts,30,grep ""fetchAndPush"" packages/server/src/rpc/ws-poller.ts → 有输出,fetchOffset 不能小于 minFetchOffset，否则会重复获取损坏步骤,P0,已完成
 32,P4:Delta Polling,实现轮询循环,"【做什么】实现 ACTIVE 和 IDLE 模式的轮询循环
 【为什么】这是持续获取步骤的机制
 【具体操作】①实现 scheduleNext(delay) 函数，ACTIVE 模式 50ms 轮询 ②实现 scheduleHeartbeat() 函数，IDLE 模式 5s 心跳 ③在 ACTIVE 模式调用 fetchAndPush(true) ④在 IDLE 模式调用 GetCascadeTrajectory 检查状态 ⑤参考 porta/packages/proxy/src/ws.ts L423-494
-【验收标准】两个函数存在，轮询间隔正确",packages/server/src/rpc/ws-poller.ts,31,grep ""scheduleNext\|scheduleHeartbeat"" packages/server/src/rpc/ws-poller.ts → 有输出,ACTIVE 模式必须调用 fetchAndPush(true) 启用重叠窗口,P0,待开始
+【验收标准】两个函数存在，轮询间隔正确",packages/server/src/rpc/ws-poller.ts,31,grep ""scheduleNext\|scheduleHeartbeat"" packages/server/src/rpc/ws-poller.ts → 有输出,ACTIVE 模式必须调用 fetchAndPush(true) 启用重叠窗口,P0,已完成
 33,P4:Delta Polling,实现激活信号监听,"【做什么】监听 conversationSignals 的 activate 事件
 【为什么】REST 发送消息后需要通知 WebSocket 进入 ACTIVE 模式
 【具体操作】①在 ws-poller.ts 中 import { conversationSignals } from './signals' ②添加 conversationSignals.on('activate', onActivate) ③onActivate 函数中调用 enterActive()
-【验收标准】事件监听正确，编译通过",packages/server/src/rpc/ws-poller.ts,32,grep ""conversationSignals.on"" packages/server/src/rpc/ws-poller.ts → 有输出,必须在 WebSocket 连接时注册监听，断开时移除，否则内存泄漏,P0,待开始
+【验收标准】事件监听正确，编译通过",packages/server/src/rpc/ws-poller.ts,32,grep ""conversationSignals.on"" packages/server/src/rpc/ws-poller.ts → 有输出,必须在 WebSocket 连接时注册监听，断开时移除，否则内存泄漏,P0,已完成
 34,P4:Delta Polling,修改 interaction.ts 发送激活信号,"【做什么】在消息发送成功后发送激活信号
 【为什么】通知 WebSocket 进入 ACTIVE 模式开始轮询
 【具体操作】①打开 packages/server/src/api/interaction.ts ②在消息发送成功后（L29 之后）添加 conversationSignals.emit('activate', req.params.id) ③在文件顶部 import { conversationSignals } from '../rpc/signals'
-【验收标准】emit 调用存在，编译通过",packages/server/src/api/interaction.ts,33,grep ""conversationSignals.emit"" packages/server/src/api/interaction.ts → 有输出,只在成功后 emit，失败不要 emit,P0,待开始
+【验收标准】emit 调用存在，编译通过",packages/server/src/api/interaction.ts,33,grep ""conversationSignals.emit"" packages/server/src/api/interaction.ts → 有输出,只在成功后 emit，失败不要 emit,P0,已完成
 35,P4:Delta Polling,实现 WebSocket 消息格式,"【做什么】定义 WebSocket 消息类型并实现推送
 【为什么】前端需要接收结构化的步骤数据
 【具体操作】①在 packages/shared/src/types/ws.ts 添加 steps 消息类型 ②格式：{ type: 'steps', offset: number, steps: TrajectoryStep[] } ③在 ws-poller.ts 的 fetchAndPush 中推送该格式 ④同时保留 ready 和 status 消息
-【验收标准】消息类型定义完整，推送格式正确",packages/shared/src/types/ws.ts; packages/server/src/rpc/ws-poller.ts,31,grep ""type.*steps"" packages/shared/src/types/ws.ts → 有输出,offset 表示步骤起始索引，steps 是数组，不要搞反,P0,待开始
+【验收标准】消息类型定义完整，推送格式正确",packages/shared/src/types/ws.ts; packages/server/src/rpc/ws-poller.ts,31,grep ""type.*steps"" packages/shared/src/types/ws.ts → 有输出,offset 表示步骤起始索引，steps 是数组，不要搞反,P0,已完成
 36,P4:Delta Polling,Phase 4 回归验证,"【做什么】验证 Phase 4 所有改动正确
 【为什么】确保 delta polling 功能正常，Phase 5 才能开始
 【具体操作】①执行 pnpm build ②启动 AG 和服务器 ③用 wscat 连接 WebSocket ④发送消息，检查是否收到 steps 消息 ⑤执行 git add -A && git commit -m ""refactor: Phase 4 - Delta Polling""
-【验收标准】编译通过，WebSocket 正常推送步骤",所有 Phase 4 涉及文件,28;29;30;31;32;33;34;35,wscat -c ws://localhost:3563/api/conversations/{id}/ws → 收到 steps 消息,如果没收到消息，检查激活信号是否正确发送,P0,待开始
+【验收标准】编译通过，WebSocket 正常推送步骤",所有 Phase 4 涉及文件,28;29;30;31;32;33;34;35,wscat -c ws://localhost:3563/api/conversations/{id}/ws → 收到 steps 消息,如果没收到消息，检查激活信号是否正确发送,P0,已完成
 37,P5:前端适配,导入 TrajectoryStep 类型,"【做什么】在前端导入 shared 包的 TrajectoryStep 类型
 【为什么】前端需要这个类型来解析步骤数据
 【具体操作】①打开 packages/web/src/types/index.ts ②添加 export { TrajectoryStep } from '@ag/shared' ③确认 @ag/web 的 package.json 依赖 @ag/shared

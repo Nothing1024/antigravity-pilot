@@ -16,6 +16,7 @@ import { updateSnapshots } from "./loop/snapshot";
 import { globalRateLimit, completionsRateLimit } from "./middleware/ratelimit";
 import { updatePhases } from "./monitor/phase";
 import { runHealthChecks } from "./pool/health";
+import { setupConversationWebSocket } from "./rpc/ws-poller";
 import { initWebhooks } from "./webhooks/notify";
 import { broadcastCascadeList, initBroadcast } from "./ws/broadcast";
 
@@ -83,9 +84,26 @@ async function main(): Promise<void> {
   app.set("trust proxy", true);
 
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Broadcast WS: /ws
+  // Use noServer mode so it doesn't reject other WS upgrade paths (e.g. /api/conversations/:id/ws).
+  server.on("upgrade", (req, socket, head) => {
+    try {
+      const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
+      if (url.pathname !== "/ws") return;
+
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit("connection", ws, req);
+      });
+    } catch {
+      socket.destroy();
+    }
+  });
 
   initBroadcast(wss);
+  // Phase 4: per-conversation WS delta polling
+  setupConversationWebSocket(server, config.port);
 
   app.use(express.json());
 

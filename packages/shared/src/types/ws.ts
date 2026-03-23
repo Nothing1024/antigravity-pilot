@@ -1,6 +1,7 @@
 import type { QuotaInfo } from "./api";
 import type { CascadeListItem, ConnectionState, ResponsePhase } from "./cascade";
 import type { Snapshot } from "./snapshot";
+import type { TrajectoryStep } from "./trajectory";
 
 export type CascadeListMessage = {
   type: "cascade_list";
@@ -50,6 +51,26 @@ export type ConnectionStateMessage = {
   state: ConnectionState;
   previousState: ConnectionState;
 };
+
+// --- Conversation step streaming (per-conversation WS) ---
+
+export type ReadyMessage = {
+  type: "ready";
+  stepCount: number;
+};
+
+export type StatusMessage = {
+  type: "status";
+  running: boolean;
+};
+
+export type StepsMessage = {
+  type: "steps";
+  offset: number;
+  steps: TrajectoryStep[];
+};
+
+export type ConversationWSMessage = ReadyMessage | StatusMessage | StepsMessage;
 
 export type WSMessage =
   | CascadeListMessage
