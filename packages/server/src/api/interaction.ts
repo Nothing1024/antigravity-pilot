@@ -2,6 +2,7 @@ import express from "express";
 
 import { captureHTML } from "../capture/html";
 import { injectMessage } from "../cdp/inject";
+import { sendMessageWithFallback } from "../rpc/fallback";
 import { cascadeStore } from "../store/cascades";
 import { hashString } from "../utils/hash";
 import { broadcast } from "../ws/broadcast";
@@ -26,7 +27,7 @@ interactionRouter.post("/send/:id", async (req, res) => {
   // but user asked for "update" which implies features, I'll assume I should include it.
   // See helper below.
 
-  const result = await injectMessage(c.cdp, req.body.message);
+  const result = await sendMessageWithFallback(req.params.id, req.body.message);
   if (result.ok) res.json(result);
   else res.status(500).json(result);
 });

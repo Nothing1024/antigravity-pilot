@@ -33,6 +33,9 @@ export type UserConfigFile = {
   apiKeys?: Array<{ key: string; name: string }>;
   api?: Partial<ApiConfig>;
 
+  // RPC
+  rpc?: Partial<RpcConfig>;
+
   // F6: Webhooks
   webhooks?: WebhookConfigEntry[];
 };
@@ -55,6 +58,10 @@ export type ApiConfig = {
   enabled: boolean;
   openaiCompat: boolean;
   rateLimit: RateLimitConfig;
+};
+
+export type RpcConfig = {
+  preferRpcForMessages: boolean;
 };
 
 export type WebhookConfigEntry = {
@@ -90,6 +97,9 @@ export type AppConfig = {
   // F4/F5: API Service
   apiKeys: Array<{ key: string; name: string }>;
   api: ApiConfig;
+
+  // RPC
+  rpc: RpcConfig;
 
   // F6: Webhooks
   webhooks: WebhookConfigEntry[];
@@ -205,6 +215,10 @@ export function loadConfig(): AppConfig {
     },
   };
 
+  const rpc: RpcConfig = {
+    preferRpcForMessages: userConfig.rpc?.preferRpcForMessages ?? true,
+  };
+
   const webhooks = userConfig.webhooks || [];
 
   webpush.setVapidDetails(vapidSubject, vapidKeys.publicKey, vapidKeys.privateKey);
@@ -225,6 +239,7 @@ export function loadConfig(): AppConfig {
     connectionPool,
     apiKeys,
     api,
+    rpc,
     webhooks,
   };
 }
