@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false --exclude \"../shared/dist/**\" --exclude \"../shared/dist-cjs/**\" src/index.ts",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json && node ./scripts/postbuild.cjs"
   },
   "dependencies": {
     "@ag/shared": "workspace:*",

@@ -22,43 +22,43 @@
 6,P1:RPC基础设施,复制平台适配器目录,"【做什么】从 porta 复制整个 platform/ 目录
 【为什么】LS 发现需要 OS 特定的进程扫描逻辑
 【具体操作】①cd /Users/nothing/workspace/antigravity/porta ②cp -r packages/proxy/src/platform /Users/nothing/workspace/antigravity/antigravity-pilot/packages/server/src/rpc/ ③验证文件数量
-【验收标准】5 个 .ts 文件存在（index.ts, types.ts, darwin.ts, linux.ts, win32.ts, shared.ts）",packages/server/src/rpc/platform/,5,ls packages/server/src/rpc/platform/*.ts | wc -l → 显示 6,不要修改文件内容，直接复制,P0,待开始
+【验收标准】5 个 .ts 文件存在（index.ts, types.ts, darwin.ts, linux.ts, win32.ts, shared.ts）",packages/server/src/rpc/platform/,5,ls packages/server/src/rpc/platform/*.ts | wc -l → 显示 6,不要修改文件内容，直接复制,P0,已完成
 7,P1:RPC基础设施,复制 transport-hints 模块,"【做什么】从 porta 复制 transport-hints.ts
 【为什么】RPC 客户端需要记住上次成功的协议（HTTP/HTTPS）
 【具体操作】①从 porta/packages/proxy/src/transport-hints.ts 复制到 packages/server/src/rpc/transport-hints.ts ②验证行数约 41 行
-【验收标准】文件存在，wc -l 显示约 41 行",packages/server/src/rpc/transport-hints.ts,5,wc -l packages/server/src/rpc/transport-hints.ts → 约 41 行,无,P0,待开始
+【验收标准】文件存在，wc -l 显示约 41 行",packages/server/src/rpc/transport-hints.ts,5,wc -l packages/server/src/rpc/transport-hints.ts → 约 41 行,无,P0,已完成
 8,P1:RPC基础设施,复制 discovery 主逻辑,"【做什么】从 porta 复制 discovery.ts
 【为什么】这是 LS 发现的核心逻辑，包含 daemon 文件读取和进程扫描
 【具体操作】①从 porta/packages/proxy/src/discovery.ts 复制到 packages/server/src/rpc/discovery.ts ②验证行数约 418 行
-【验收标准】文件存在，wc -l 显示约 418 行",packages/server/src/rpc/discovery.ts,5,wc -l packages/server/src/rpc/discovery.ts → 约 418 行,无,P0,待开始
+【验收标准】文件存在，wc -l 显示约 418 行",packages/server/src/rpc/discovery.ts,5,wc -l packages/server/src/rpc/discovery.ts → 约 418 行,无,P0,已完成
 9,P1:RPC基础设施,修改 discovery import 路径,"【做什么】移除 discovery.ts 中的 .js 后缀
 【为什么】porta 使用 ESM 需要 .js 后缀，本项目不需要
 【具体操作】①打开 packages/server/src/rpc/discovery.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx"" ④特别注意 from ""./platform/index.js"" 改为 from ""./platform/index""
-【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/discovery.ts,8,grep ""\.js"" packages/server/src/rpc/discovery.ts → 无输出,最容易漏掉 platform/index.js，必须仔细检查,P0,待开始
+【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/discovery.ts,8,grep ""\.js"" packages/server/src/rpc/discovery.ts → 无输出,最容易漏掉 platform/index.js，必须仔细检查,P0,已完成
 10,P1:RPC基础设施,复制 RPC 客户端,"【做什么】从 porta 复制 rpc.ts 并重命名为 client.ts
 【为什么】这是 RPC 调用的核心客户端，处理 HTTP/HTTPS 双协议回退
 【具体操作】①从 porta/packages/proxy/src/rpc.ts 复制到 packages/server/src/rpc/client.ts ②验证行数约 310 行
-【验收标准】文件存在，wc -l 显示约 310 行",packages/server/src/rpc/client.ts,5,wc -l packages/server/src/rpc/client.ts → 约 310 行,无,P0,待开始
+【验收标准】文件存在，wc -l 显示约 310 行",packages/server/src/rpc/client.ts,5,wc -l packages/server/src/rpc/client.ts → 约 310 行,无,P0,已完成
 11,P1:RPC基础设施,修改 client import 路径,"【做什么】移除 client.ts 中的 .js 后缀
 【为什么】同 discovery，本项目不需要 .js 后缀
 【具体操作】①打开 packages/server/src/rpc/client.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx"" ④特别注意 from ""./discovery.js"" 和 from ""./transport-hints.js""
-【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/client.ts,10,grep ""\.js"" packages/server/src/rpc/client.ts → 无输出,无,P0,待开始
+【验收标准】grep 无 .js 后缀，TypeScript 编译通过",packages/server/src/rpc/client.ts,10,grep ""\.js"" packages/server/src/rpc/client.ts → 无输出,无,P0,已完成
 12,P1:RPC基础设施,复制 routing 模块,"【做什么】从 porta 复制 routing.ts
 【为什么】这是工作区路由的核心逻辑，包含 affinity 缓存和归一化
 【具体操作】①从 porta/packages/proxy/src/routing.ts 复制到 packages/server/src/rpc/routing.ts ②验证行数约 331 行
-【验收标准】文件存在，wc -l 显示约 331 行",packages/server/src/rpc/routing.ts,5,wc -l packages/server/src/rpc/routing.ts → 约 331 行,无,P0,待开始
+【验收标准】文件存在，wc -l 显示约 331 行",packages/server/src/rpc/routing.ts,5,wc -l packages/server/src/rpc/routing.ts → 约 331 行,无,P0,已完成
 13,P1:RPC基础设施,修改 routing import 路径,"【做什么】移除 routing.ts 中的 .js 后缀
 【为什么】同上
 【具体操作】①打开 packages/server/src/rpc/routing.ts ②查找所有 from ""./xxx.js"" ③全部改为 from ""./xxx""
-【验收标准】grep 无 .js 后缀，确保导出 discovery 和 rpc 单例",packages/server/src/rpc/routing.ts,12,grep ""export const discovery"" packages/server/src/rpc/routing.ts → 有输出,必须确保导出 discovery 和 rpc 单例，其他模块要用,P0,待开始
+【验收标准】grep 无 .js 后缀，确保导出 discovery 和 rpc 单例",packages/server/src/rpc/routing.ts,12,grep ""export const discovery"" packages/server/src/rpc/routing.ts → 有输出,必须确保导出 discovery 和 rpc 单例，其他模块要用,P0,已完成
 14,P1:RPC基础设施,编译验证 RPC 模块,"【做什么】验证所有 RPC 模块编译通过
 【为什么】确保 import 路径和类型定义都正确
 【具体操作】①执行 pnpm build ②检查是否有编译错误 ③特别注意 LSInstance 类型是否正确导入
-【验收标准】编译通过，无类型错误",所有 RPC 模块,6;7;8;9;10;11;12;13,pnpm build → 无错误,如果报 LSInstance 找不到，检查 types.ts 是否正确导出,P0,待开始
+【验收标准】编译通过，无类型错误",所有 RPC 模块,6;7;8;9;10;11;12;13,pnpm build → 无错误,如果报 LSInstance 找不到，检查 types.ts 是否正确导出,P0,已完成
 15,P1:RPC基础设施,Phase 1 回归验证,"【做什么】验证 Phase 1 所有改动正确且可用
 【为什么】确保 RPC 基础设施可用，Phase 2 才能开始
 【具体操作】①执行 pnpm build ②启动真实 AG 实例 ③创建测试脚本调用 discoverInstances() ④检查是否能发现 LS
-【验收标准】编译通过，能发现至少 1 个 LS 实例",所有 Phase 1 涉及文件,14,node -e ""const {discoverInstances} = require('./packages/server/dist/rpc/discovery.js'); discoverInstances().then(console.log)"" → 返回 LS 数组,如果发现失败，检查 AG 是否启动，daemon 文件是否存在,P0,待开始
+【验收标准】编译通过，能发现至少 1 个 LS 实例",所有 Phase 1 涉及文件,14,node -e ""const {discoverInstances} = require('./packages/server/dist/rpc/discovery.js'); discoverInstances().then(console.log)"" → 返回 LS 数组,如果发现失败，检查 AG 是否启动，daemon 文件是否存在,P0,已完成
 16,P2:消息发送迁移,创建 fallback 模块,"【做什么】创建 rpc/fallback.ts，实现 RPC 优先 + CDP 降级
 【为什么】消息发送要先尝试 RPC，失败时回退到 CDP
 【具体操作】①创建 packages/server/src/rpc/fallback.ts ②实现 sendMessageWithFallback(cascadeId, content) 函数 ③函数内先调用 rpcForConversation(""SendUserCascadeMessage"", ...) ④catch 错误后调用原 injectMessage() ⑤添加日志区分 RPC/CDP 路径
