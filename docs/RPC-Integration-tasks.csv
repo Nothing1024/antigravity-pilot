@@ -170,23 +170,23 @@
 43,P6:OpenAI API优化,修改 openai-compat 消息发送,"【做什么】将 OpenAI API 的消息发送改为 RPC
 【为什么】提升 OpenAI API 性能
 【具体操作】①打开 packages/server/src/api/openai-compat.ts ②找到 L164 的 injectMessage() 调用 ③改为 sendMessageWithFallback() ④在文件顶部添加 import
-【验收标准】代码修改正确，编译通过",packages/server/src/api/openai-compat.ts,21,grep ""sendMessageWithFallback"" packages/server/src/api/openai-compat.ts → 有输出,无,P1,待开始
+【验收标准】代码修改正确，编译通过",packages/server/src/api/openai-compat.ts,21,grep ""sendMessageWithFallback"" packages/server/src/api/openai-compat.ts → 有输出,无,P1,已完成
 44,P6:OpenAI API优化,修改响应提取逻辑,"【做什么】将响应提取从 DOM 改为 RPC 步骤
 【为什么】RPC 步骤数据更可靠
 【具体操作】①删除 L152 的 CHAT_TEXT_SCRIPT 调用 ②改为轮询 GetCascadeTrajectorySteps ③提取 type === 'PLANNER_RESPONSE' 的步骤 ④拼接 content.text 字段
-【验收标准】响应提取逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,43,grep ""PLANNER_RESPONSE"" packages/server/src/api/openai-compat.ts → 有输出,PLANNER_RESPONSE 步骤可能有多个，需要按顺序拼接,P1,待开始
+【验收标准】响应提取逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,43,grep ""PLANNER_RESPONSE"" packages/server/src/api/openai-compat.ts → 有输出,PLANNER_RESPONSE 步骤可能有多个，需要按顺序拼接,P1,已完成
 45,P6:OpenAI API优化,修改完成检测,"【做什么】将完成检测从 DOM 改为 RPC status
 【为什么】RPC status 更可靠
 【具体操作】①找到 L200+ 的完成检测逻辑 ②改为检查 GetCascadeTrajectory 的 status 字段 ③status === 'CASCADE_RUN_STATUS_IDLE' 且无新步骤 → 完成
-【验收标准】完成检测逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,44,grep ""CASCADE_RUN_STATUS_IDLE"" packages/server/src/api/openai-compat.ts → 有输出,完成检测要同时检查 status 和步骤数，避免过早完成,P1,待开始
+【验收标准】完成检测逻辑正确，编译通过",packages/server/src/api/openai-compat.ts,44,grep ""CASCADE_RUN_STATUS_IDLE"" packages/server/src/api/openai-compat.ts → 有输出,完成检测要同时检查 status 和步骤数，避免过早完成,P1,已完成
 46,P6:OpenAI API优化,测试 OpenAI API,"【做什么】测试 OpenAI API 是否正常工作
 【为什么】验证改造正确
 【具体操作】①启动 AG 和服务器 ②调用 curl -X POST http://localhost:3563/v1/chat/completions -d '{""messages"":[{""role"":""user"",""content"":""test""}],""stream"":true}' ③检查是否返回 SSE 流
-【验收标准】API 正常响应，流式输出正确",无（运行时测试）,45,curl 返回 SSE 流，无报错,如果流式响应中断，检查完成检测逻辑,P1,待开始
+【验收标准】API 正常响应，流式输出正确",无（运行时测试）,45,curl 返回 SSE 流，无报错,如果流式响应中断，检查完成检测逻辑,P1,已完成
 47,P6:OpenAI API优化,Phase 6 回归验证,"【做什么】验证 Phase 6 所有改动正确
 【为什么】确保 OpenAI API 优化完成，Phase 7 才能开始
 【具体操作】①执行 pnpm build ②测试流式和非流式响应 ③执行 git add -A && git commit -m ""refactor: Phase 6 - OpenAI API 优化""
-【验收标准】编译通过，API 测试通过",所有 Phase 6 涉及文件,46,pnpm build → 无错误; API 测试通过,Phase 完成后必须 commit,P1,待开始
+【验收标准】编译通过，API 测试通过",所有 Phase 6 涉及文件,46,pnpm build → 无错误; API 测试通过,Phase 完成后必须 commit,P1,已完成
 48,P7:清理与配置化,删除旧发现逻辑,"【做什么】删除 loop/discovery.ts
 【为什么】已被 rpc/discovery.ts 替代，不再需要
 【具体操作】①执行 rm packages/server/src/loop/discovery.ts ②检查是否有其他文件 import 它 ③如果有则删除 import

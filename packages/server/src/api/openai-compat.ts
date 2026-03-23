@@ -10,8 +10,8 @@
  *   POST /v1/chat/completions
  *     → Extract last user message
  *     → Route to target cascade (auto-select or explicit)
- *     → Inject via CDP
- *     → Monitor phase transitions (THINKING → GENERATING → COMPLETED)
+ *     → Send message via RPC (fallback to CDP)
+ *     → Poll trajectory steps via RPC (PLANNER_RESPONSE)
  *     → Stream or return final response
  */
 
@@ -19,11 +19,10 @@ import { randomBytes } from "node:crypto";
 
 import express from "express";
 
-import { ResponsePhase } from "@ag/shared";
+import { type TrajectoryStep } from "@ag/shared";
 
-import { injectMessage } from "../cdp/inject";
-import { CHAT_TEXT_SCRIPT } from "../cdp/chat-text-script";
-import { eventBus } from "../events/bus";
+import { sendMessageWithFallback } from "../rpc/fallback";
+import { rpcForConversation } from "../rpc/routing";
 import { cascadeStore } from "../store/cascades";
 
 export const openaiRouter: express.Router = express.Router();
@@ -94,21 +93,21 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
   }
 
   // Route to cascade
-  let targetCascade: any = null;
+  const requestedCascadeId =
+    typeof model === "string" && model !== "antigravity"
+      ? // Support "cascade:<id>" syntax from CLI, or raw cascade ID
+        model.startsWith("cascade:") ? model.slice(8) : model
+      : null;
 
-  if (model && model !== "antigravity") {
-    // Support "cascade:<id>" syntax from CLI, or raw cascade ID
-    const cascadeId = model.startsWith("cascade:") ? model.slice(8) : model;
-    targetCascade = cascadeStore.get(cascadeId);
-  }
-  if (!targetCascade) {
-    const allCascades = cascadeStore.getAll();
-    if (allCascades.length > 0) {
-      targetCascade = allCascades[0];
-    }
-  }
+  const targetCascade = requestedCascadeId
+    ? cascadeStore.get(requestedCascadeId)
+    : cascadeStore.getAll()[0];
 
-  if (!targetCascade) {
+  // Allow RPC-only operation when model explicitly specifies cascadeId,
+  // even if there's no active CDP session tracked in cascadeStore.
+  const cascadeId = targetCascade?.id ?? requestedCascadeId;
+
+  if (!cascadeId) {
     return res.status(503).json({
       error: {
         message: "No active Antigravity IDE sessions found",
@@ -118,20 +117,8 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
     });
   }
 
-  // Skip if no CDP connection
-  if (!targetCascade.cdp) {
-    return res.status(503).json({
-      error: {
-        message: "Cascade has no active CDP connection",
-        type: "server_error",
-        code: "no_cdp",
-      },
-    });
-  }
-
   const completionId = makeCompletionId();
   const created = Math.floor(Date.now() / 1000);
-  const cascadeId = targetCascade.id;
 
   // Inject system message as context prefix if present
   const systemMessages = messages.filter((m: any) => m.role === "system");
@@ -141,58 +128,108 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
     prompt = `[System Context: ${systemContext}]\n\n${prompt}`;
   }
 
-  /**
-   * Grab all chat text via CDP using the imported script.
-   */
-  async function getChatText(cascade: any): Promise<string> {
-    const ctx = cascade.cdp.rootContextId;
-    if (!ctx) return "";
-    try {
-      const result: any = await cascade.cdp.call("Runtime.evaluate", {
-        expression: CHAT_TEXT_SCRIPT,
-        returnByValue: true,
-        contextId: ctx,
-      });
-      return (result.result?.value?.text || "").trim();
-    } catch {
-      return "";
-    }
+  const RUNNING_STATUS = "CASCADE_RUN_STATUS_RUNNING";
+  const IDLE_STATUS = "CASCADE_RUN_STATUS_IDLE";
+  const OVERLAP_STEPS = 20;
+
+  type TrajectoryInfo = { status?: string; numTotalSteps?: number };
+  type StepsInfo = { steps?: TrajectoryStep[] };
+
+  // Baseline step count BEFORE send — prevents leaking prior conversation text.
+  let baselineStepCount = 0;
+  try {
+    const baseline = (await rpcForConversation(
+      "GetCascadeTrajectory",
+      cascadeId,
+      { cascadeId },
+      undefined,
+      true,
+    )) as TrajectoryInfo;
+    baselineStepCount = baseline.numTotalSteps ?? 0;
+  } catch {
+    baselineStepCount = 0;
   }
 
-  // --- Inject message into Antigravity ---
-  try {
-    const injected = await injectMessage(targetCascade.cdp, prompt);
-    if (!injected?.ok) {
-      return res.status(500).json({
-        error: {
-          message: "Failed to inject message into Antigravity IDE",
-          type: "server_error",
-          code: "injection_failed",
-        },
-      });
-    }
-  } catch (e: any) {
+  // --- Send message into Antigravity (RPC → fallback CDP) ---
+  const injected = await sendMessageWithFallback(cascadeId, prompt);
+  if (!injected?.ok) {
     return res.status(500).json({
       error: {
-        message: `CDP injection error: ${e.message}`,
+        message: "Failed to send message into Antigravity IDE",
         type: "server_error",
-        code: "cdp_error",
+        code: "injection_failed",
       },
     });
   }
 
-  // Wait for DOM to settle after injection (user message appears)
-  await new Promise((r) => setTimeout(r, 1500));
+  // Give LS a moment to materialize new steps after the send.
+  await new Promise((r) => setTimeout(r, 150));
 
-  // --- Capture baseline AFTER injection ---
-  // Now baseline includes history + user's message, diff = agent's response only
-  let baselineText = "";
-  try {
-    baselineText = await getChatText(targetCascade);
-  } catch {}
+  const baseOffset = baselineStepCount;
+  const bufferedSteps: Array<TrajectoryStep | undefined> = [];
+  let lastKnownEnd = baselineStepCount;
+
+  const mergeSteps = (stepOffset: number, steps: TrajectoryStep[]) => {
+    const start = stepOffset - baseOffset;
+    if (start < 0) return;
+    for (let i = 0; i < steps.length; i++) {
+      bufferedSteps[start + i] = steps[i];
+    }
+    lastKnownEnd = Math.max(lastKnownEnd, stepOffset + steps.length);
+  };
+
+  const buildPlannerText = (): string => {
+    const parts: string[] = [];
+    for (const step of bufferedSteps) {
+      if (!step) continue;
+      if (step.type !== "PLANNER_RESPONSE") continue;
+      const text = step.content?.text;
+      if (typeof text === "string" && text.length > 0) {
+        parts.push(text);
+      }
+    }
+    return parts.join("\n\n");
+  };
+
+  const fetchSnapshot = async (): Promise<{
+    status: string;
+    numTotalSteps: number;
+    text: string;
+  }> => {
+    const traj = (await rpcForConversation(
+      "GetCascadeTrajectory",
+      cascadeId,
+      { cascadeId },
+      undefined,
+      true,
+    )) as TrajectoryInfo;
+
+    const status = traj.status ?? "";
+    const numTotalSteps = traj.numTotalSteps ?? lastKnownEnd;
+
+    const fetchOffset = Math.max(
+      baseOffset,
+      Math.max(lastKnownEnd, numTotalSteps) - OVERLAP_STEPS,
+    );
+    const data = (await rpcForConversation(
+      "GetCascadeTrajectorySteps",
+      cascadeId,
+      { cascadeId, stepOffset: fetchOffset },
+      undefined,
+      true,
+    )) as StepsInfo;
+
+    const steps = data.steps ?? [];
+    if (steps.length > 0) {
+      mergeSteps(fetchOffset, steps);
+    }
+
+    lastKnownEnd = Math.max(lastKnownEnd, numTotalSteps);
+    return { status, numTotalSteps, text: buildPlannerText() };
+  };
 
   if (stream) {
-    // --- Streaming SSE Response (Baseline-Diff Strategy) ---
+    // --- Streaming SSE Response (Trajectory steps diff) ---
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -222,24 +259,19 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
     let sentLength = 0; // how much of the NEW content we've sent
     let completed = false;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    let stableCount = 0; // count polls with no new content (to detect completion)
-    let firstContentAt = 0; // timestamp when first content was detected
+    let stableTextCount = 0; // polls with no new text (content stability)
+    let stableStepCount = 0; // polls with no new steps (step-count stability)
+    let lastNumTotalSteps = baselineStepCount;
+    let hasStarted = false;
 
     const cleanup = () => {
       completed = true;
       if (pollTimer) clearTimeout(pollTimer);
-      eventBus.off("phase_change", onPhaseChange);
     };
     req.on("close", cleanup);
 
-    const onPhaseChange = (ev: any) => {
-      if (ev.cascadeId !== cascadeId || completed) return;
-      // Terminal phases will be detected in poll loop
-    };
-    eventBus.on("phase_change", onPhaseChange);
-
-    // --- Active polling loop: diff against baseline ---
-    const POLL_INTERVAL = 500;
+    // --- Active polling loop ---
+    const POLL_INTERVAL = 150;
     const TIMEOUT = 600_000; // 10 minutes
     const startTime = Date.now();
 
@@ -255,25 +287,24 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
         return;
       }
 
-      // Poll: get full chat text and diff against baseline
-      const fullText = await getChatText(targetCascade);
-
-      // New content = everything after the baseline
+      let status = "";
+      let numTotalSteps = lastNumTotalSteps;
       let newContent = "";
-      if (fullText.length > baselineText.length && fullText.startsWith(baselineText)) {
-        // Simple case: new text appended to baseline
-        newContent = fullText.slice(baselineText.length).trim();
-      } else if (fullText.length > baselineText.length) {
-        // Text restructured — try to find the diff
-        const overlapLen = Math.min(baselineText.length, 200);
-        const tail = baselineText.slice(-overlapLen);
-        const idx = fullText.lastIndexOf(tail);
-        if (idx >= 0) {
-          newContent = fullText.slice(idx + tail.length).trim();
-        } else {
-          // Can't find overlap — just use the trailing portion
-          newContent = fullText.slice(baselineText.length).trim();
-        }
+      try {
+        const snap = await fetchSnapshot();
+        status = snap.status;
+        numTotalSteps = snap.numTotalSteps;
+        newContent = snap.text;
+      } catch {
+        // allow transient failures
+      }
+
+      if (
+        status === RUNNING_STATUS ||
+        numTotalSteps > baselineStepCount ||
+        newContent.length > 0
+      ) {
+        hasStarted = true;
       }
 
       // Send delta (only the part we haven't sent yet)
@@ -281,42 +312,39 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
         const delta = newContent.slice(sentLength);
         sendChunk({ content: delta });
         sentLength = newContent.length;
-        stableCount = 0;
-        if (!firstContentAt) firstContentAt = Date.now();
+        stableTextCount = 0;
       } else {
-        stableCount++;
+        stableTextCount++;
       }
 
-      // Also update cascade's responseText
+      // Also update cascade's responseText (for /api/status consumers)
       const c = cascadeStore.get(cascadeId);
 
-      // Check if complete: phase is terminal AND text is stable
       if (c) {
         c.responseText = newContent;
+      }
 
-        const isTerminal =
-          c.phase === ResponsePhase.COMPLETED ||
-          c.phase === ResponsePhase.IDLE ||
-          c.phase === ResponsePhase.ERROR ||
-          c.phase === ResponsePhase.QUOTA_ERROR;
+      // Step-count stability (for completion detection)
+      if (numTotalSteps === lastNumTotalSteps) {
+        stableStepCount++;
+      } else {
+        stableStepCount = 0;
+        lastNumTotalSteps = numTotalSteps;
+      }
 
-        if (isTerminal && sentLength > 0) {
-          const sinceFirstContent = firstContentAt ? Date.now() - firstContentAt : 0;
-
-          // Tiered completion detection:
-          // - 6 stable polls (3s) after terminal phase as default
-          // - Short responses (<500 chars): 4 polls (2s) is enough
-          // - Must have at least 2s since first content appeared
-          const stableThreshold = sentLength < 500 ? 4 : 6;
-          if (stableCount >= stableThreshold && sinceFirstContent > 2000) {
-            completed = true;
-            sendChunk({}, "stop");
-            res.write("data: [DONE]\n\n");
-            cleanup();
-            res.end();
-            return;
-          }
-        }
+      // Completion: IDLE + no new steps + no new text
+      if (
+        hasStarted &&
+        status === IDLE_STATUS &&
+        stableStepCount >= 2 &&
+        stableTextCount >= 2
+      ) {
+        completed = true;
+        sendChunk({}, "stop");
+        res.write("data: [DONE]\n\n");
+        cleanup();
+        res.end();
+        return;
       }
 
       pollTimer = setTimeout(pollForText, POLL_INTERVAL);
@@ -329,34 +357,67 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
     const TIMEOUT = 600_000; // 10 minutes
 
     try {
-      // Wait for completion
-      await eventBus.waitFor(
-        "phase_change",
-        (ev) =>
-          ev.cascadeId === cascadeId &&
-          (ev.phase === ResponsePhase.COMPLETED ||
-           ev.phase === ResponsePhase.IDLE ||
-           ev.phase === ResponsePhase.ERROR ||
-           ev.phase === ResponsePhase.QUOTA_ERROR),
-        TIMEOUT
-      );
-
-      // Wait a moment for final DOM render, then extract text using the same
-      // Markdown conversion as streaming mode for consistent output
-      await new Promise((r) => setTimeout(r, 1500));
+      const startTime = Date.now();
+      const POLL_INTERVAL = 150;
+      let stableTextCount = 0;
+      let stableStepCount = 0;
+      let lastNumTotalSteps = baselineStepCount;
+      let lastTextLength = 0;
+      let hasStarted = false;
 
       let responseText = "";
-      try {
-        responseText = await getChatText(targetCascade);
-        // Extract only the new content (after baseline)
-        if (responseText.length > baselineText.length && responseText.startsWith(baselineText)) {
-          responseText = responseText.slice(baselineText.length).trim();
-        } else if (responseText.length > baselineText.length) {
-          responseText = responseText.slice(baselineText.length).trim();
-        }
-      } catch {}
+      let status = "";
 
-      // Fallback to phase monitor's text if getChatText failed
+      while (true) {
+        if (Date.now() - startTime > TIMEOUT) {
+          throw new Error("timeout");
+        }
+
+        try {
+          const snap = await fetchSnapshot();
+          status = snap.status;
+          responseText = snap.text;
+
+          if (
+            status === RUNNING_STATUS ||
+            snap.numTotalSteps > baselineStepCount ||
+            responseText.length > 0
+          ) {
+            hasStarted = true;
+          }
+
+          // text stability
+          if (responseText.length === lastTextLength) {
+            stableTextCount++;
+          } else {
+            stableTextCount = 0;
+            lastTextLength = responseText.length;
+          }
+
+          // step-count stability
+          if (snap.numTotalSteps === lastNumTotalSteps) {
+            stableStepCount++;
+          } else {
+            stableStepCount = 0;
+            lastNumTotalSteps = snap.numTotalSteps;
+          }
+        } catch {
+          // transient RPC failure — keep polling until timeout
+        }
+
+        if (
+          hasStarted &&
+          status === IDLE_STATUS &&
+          stableStepCount >= 2 &&
+          stableTextCount >= 2
+        ) {
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+      }
+
+      responseText = responseText.trim();
       if (!responseText) {
         const finalCascade = cascadeStore.get(cascadeId);
         responseText = finalCascade?.responseText || "Agent completed (no text captured)";
