@@ -2,12 +2,32 @@ import WebSocket, { type WebSocketServer } from "ws";
 
 import type { CascadeListItem, QuotaInfo, WSMessage } from "@ag/shared";
 
+import { eventBus } from "../events/bus";
 import { cascadeStore } from "../store/cascades";
 
 let wss: WebSocketServer | null = null;
 
 export function initBroadcast(next: WebSocketServer): void {
   wss = next;
+
+  // --- Wire EventBus → WebSocket broadcast ---
+  eventBus.on("phase_change", (ev) => {
+    broadcast({
+      type: "phase_change",
+      cascadeId: ev.cascadeId,
+      phase: ev.phase,
+      previousPhase: ev.previousPhase,
+    });
+  });
+
+  eventBus.on("connection_state", (ev) => {
+    broadcast({
+      type: "connection_state",
+      cascadeId: ev.cascadeId,
+      state: ev.state,
+      previousState: ev.previousState,
+    });
+  });
 }
 
 export function broadcast(msg: WSMessage): void {
@@ -27,7 +47,9 @@ export function broadcastCascadeList(): void {
       title: c.metadata.chatTitle,
       window: c.metadata.windowTitle,
       active: c.metadata.isActive,
-      quota: c.quota || null
+      phase: c.phase,
+      connectionState: c.connectionState,
+      quota: c.quota || null,
     }));
 
   broadcast({ type: "cascade_list", cascades: list });

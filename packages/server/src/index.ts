@@ -13,6 +13,10 @@ import { parseCookies, verifyToken } from "./auth/token";
 import { config } from "./config";
 import { discover } from "./loop/discovery";
 import { updateSnapshots } from "./loop/snapshot";
+import { globalRateLimit, completionsRateLimit } from "./middleware/ratelimit";
+import { updatePhases } from "./monitor/phase";
+import { runHealthChecks } from "./pool/health";
+import { initWebhooks } from "./webhooks/notify";
 import { broadcastCascadeList, initBroadcast } from "./ws/broadcast";
 
 function repoRootFromHere(): string {
@@ -45,6 +49,32 @@ async function loadApiRouters(): Promise<express.Router[]> {
     routers.push(mod.interactionRouter || mod.router || mod.default);
   } catch {}
 
+  // F3: Status API
+  try {
+    const mod: any = await import("./api/status");
+    routers.push(mod.statusRouter || mod.router || mod.default);
+  } catch {}
+
+  // Phase 2: Session & Model API
+  try {
+    const mod: any = await import("./api/session");
+    routers.push(mod.sessionRouter || mod.router || mod.default);
+  } catch {}
+
+  // Workspace API
+  try {
+    const mod: any = await import("./api/workspace");
+    routers.push(mod.workspaceRouter || mod.router || mod.default);
+  } catch {}
+
+  // F4: OpenAI-Compatible API
+  if (config.api.openaiCompat) {
+    try {
+      const mod: any = await import("./api/openai-compat");
+      routers.push(mod.openaiRouter || mod.router || mod.default);
+    } catch {}
+  }
+
   return routers.filter(Boolean);
 }
 
@@ -67,6 +97,11 @@ async function main(): Promise<void> {
   // Auth middleware — protects everything else
   app.use(authMiddleware);
 
+  // F7: Rate limiting (after auth so we can identify clients by API key)
+  app.use(globalRateLimit);
+  // Stricter limit for completions endpoint
+  app.use("/v1/chat/completions", completionsRateLimit);
+
   // Task#26 routers (modularized API)
   for (const r of await loadApiRouters()) app.use(r);
 
@@ -85,10 +120,20 @@ async function main(): Promise<void> {
     console.log(`ℹ️  No React build found — run 'pnpm build' for production, or use Vite dev server`);
   }
 
-  // WebSocket auth check
+  // WebSocket auth check — supports Cookie auth AND Bearer token
   wss.on("connection", (ws, req) => {
     const cookies = parseCookies(req.headers.cookie);
-    if (!verifyToken(cookies.auth)) {
+    const isAuthed = verifyToken(cookies.auth);
+
+    // Also check query param for WS Bearer auth: /ws?token=sk-xxx
+    const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    const queryToken = url.searchParams.get("token");
+    const apiKeys = config.apiKeys || [];
+    const isApiAuthed = queryToken
+      ? apiKeys.some((k) => k.key === queryToken)
+      : false;
+
+    if (!isAuthed && !isApiAuthed) {
       ws.close(4001, "Unauthorized");
       return;
     }
@@ -97,7 +142,16 @@ async function main(): Promise<void> {
 
   server.listen(config.port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${config.port}`);
+    if (config.api.openaiCompat) {
+      console.log(`🤖 OpenAI-compatible API: http://0.0.0.0:${config.port}/v1/chat/completions`);
+    }
+    if (config.apiKeys.length > 0) {
+      console.log(`🔑 API Keys configured: ${config.apiKeys.length} key(s)`);
+    }
   });
+
+  // F6: Initialize webhook listeners
+  initWebhooks();
 
   // Start loops
   discover();
@@ -106,9 +160,20 @@ async function main(): Promise<void> {
   // Self-scheduling snapshot loop: prevents overlapping when CDP calls are slow
   async function snapshotLoop(): Promise<void> {
     await updateSnapshots();
+    // F2: Phase detection piggybacks on snapshot loop
+    await updatePhases();
     setTimeout(() => void snapshotLoop(), POLL_INTERVAL);
   }
   void snapshotLoop();
+
+  // F1: Connection Pool health checks
+  const healthCheckInterval = config.connectionPool.healthCheckInterval;
+  setInterval(() => {
+    runHealthChecks().catch((e) => {
+      console.error("Health check error:", e.message);
+    });
+  }, healthCheckInterval);
+  console.log(`💓 Health check loop: every ${healthCheckInterval / 1000}s`);
 }
 
 main().catch((err) => {

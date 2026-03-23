@@ -15,6 +15,10 @@ import { getJson } from "../utils/network";
 import { hashString } from "../utils/hash";
 import { cascadeListSignature, resolveChatTitle } from "../utils/title";
 
+// Tracks targets we've already attempted connecting to, to suppress repeated log messages.
+// Entries are removed when the target connects successfully or disappears from CDP.
+const pendingTargets = new Set<string>();
+
 export async function discover(): Promise<void> {
   // 1. Find all targets
   const allTargets: any[] = [];
@@ -80,7 +84,12 @@ export async function discover(): Promise<void> {
 
     // New connection
     try {
-      console.log(`🔌 Connecting to ${target.title}`);
+      // Only log first connection attempt per target to avoid log spam
+      // (targets without chat panel return null metadata every cycle)
+      if (!pendingTargets.has(id)) {
+        console.log(`🔌 Connecting to ${target.title}`);
+        pendingTargets.add(id);
+      }
       const cdp = await connectCDP(target.webSocketDebuggerUrl);
       const meta = await extractMetadata(cdp);
 
@@ -132,6 +141,7 @@ export async function discover(): Promise<void> {
           lastPhaseChange: now,
         };
         newCascades.set(id, cascade);
+        pendingTargets.delete(id); // connected successfully
         console.log(
           `✅ Added cascade: ${resolvedTitle.title} (${resolvedTitle.source})`
         );
@@ -152,7 +162,7 @@ export async function discover(): Promise<void> {
         cdp.ws.close();
       }
     } catch {
-      // console.error(`Failed to connect to ${target.title}: ${e.message}`);
+      // silently retry next cycle
     }
   }
 
@@ -166,6 +176,12 @@ export async function discover(): Promise<void> {
         // ignore
       }
     }
+  }
+
+  // Clean up pending tracking for targets that disappeared from CDP
+  const currentTargetIds = new Set(allTargets.map((t) => hashString(t.webSocketDebuggerUrl)));
+  for (const id of pendingTargets) {
+    if (!currentTargetIds.has(id)) pendingTargets.delete(id);
   }
 
   const prevSignature = cascadeListSignature(oldMap as any);

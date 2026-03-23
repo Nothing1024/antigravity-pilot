@@ -1,4 +1,5 @@
 import type { CascadeId, CascadeMetadata, ComputedVars, QuotaInfo, Snapshot } from "@ag/shared";
+import { ConnectionState, ResponsePhase } from "@ag/shared";
 
 import type { CDPConnection } from "../cdp/types";
 
@@ -10,7 +11,7 @@ export interface CascadeEntry {
 
   snapshot: Snapshot | null;
   snapshotHash: string | null;
-  // updateSnapshots() 会在首次成功捕获后设置；用于“短快照保护”。
+  // updateSnapshots() 会在首次成功捕获后设置；用于"短快照保护"。
   contentLength?: number;
 
   css: string | null;
@@ -23,6 +24,26 @@ export interface CascadeEntry {
 
   stableCount: number;
   lastFeedbackFingerprint: string | null;
+
+  // --- F1: Connection Pool ---
+  connectionState: ConnectionState;
+  lastHealthCheck: number;
+  consecutiveFailures: number;
+  reconnectAttempts: number;
+  connectedAt: number;
+  /** CDP target info needed for reconnection */
+  reconnectTarget?: {
+    webSocketDebuggerUrl: string;
+    port: number;
+    title: string;
+  };
+
+  // --- F2: Response Monitor ---
+  phase: ResponsePhase;
+  /** Full accumulated response text from current generation */
+  responseText: string;
+  /** Timestamp of last phase change */
+  lastPhaseChange: number;
 }
 
 class CascadeStore {
@@ -55,4 +76,3 @@ class CascadeStore {
 
 // 单例：所有路由/循环必须共享同一份状态。
 export const cascadeStore = new CascadeStore();
-

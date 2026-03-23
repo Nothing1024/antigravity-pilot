@@ -2,16 +2,16 @@
   <br />
   <strong>🚀 Antigravity Pilot</strong>
   <br />
-  <em>Web UI for remotely monitoring & controlling Antigravity IDE</em>
+  <em>Web UI & API Service for remotely monitoring & controlling Antigravity IDE</em>
   <br /><br />
-  <a href="#quick-start">Quick Start</a> · <a href="#architecture">Architecture</a> · <a href="#configuration">Configuration</a> · <a href="#how-it-works">How It Works</a>
+  <a href="#quick-start">Quick Start</a> · <a href="#api-service">API Service</a> · <a href="#architecture">Architecture</a> · <a href="#configuration">Configuration</a> · <a href="#how-it-works">How It Works</a>
   <br />
   English · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 ---
 
-**Antigravity Pilot** is a lightweight Web UI that connects to [Antigravity IDE](https://antigravity.google) via Chrome DevTools Protocol (CDP). It mirrors the IDE's chat in real-time and lets you send messages, click buttons, and manage sessions — from any browser, on any device.
+**Antigravity Pilot** is a lightweight Web UI and API service that connects to [Antigravity IDE](https://antigravity.google) via Chrome DevTools Protocol (CDP). It mirrors the IDE's chat in real-time, lets you send messages, click buttons, manage sessions — from any browser, on any device — and exposes an **OpenAI-compatible API** for programmatic control.
 
 <p align="center">
   <img src="assets/demo.png" alt="Antigravity Pilot Web UI" width="800" />
@@ -60,7 +60,16 @@ open -a "Antigravity" --args --disable-gpu-driver-bug-workarounds --ignore-gpu-b
 │   Antigravity    │◄──────────────────────────►│   @ag/server   │◄────────────────────►│  Browser  │
 │      IDE         │   Ports 9000–9003          │   Port 3563    │                      │   (PWA)   │
 │   (Electron)     │                            │  (Express+WS)  │                      │           │
-└─────────────────┘                             └────────────────┘                      └───────────┘
+└─────────────────┘                             └────────┬───────┘                      └───────────┘
+                                                         │
+                                            /v1/chat/completions
+                                                         │
+                                                ┌────────┴───────┐
+                                                │  OpenAI SDK /  │
+                                                │  LangChain /   │
+                                                │  OpenClaw /    │
+                                                │  Dify / n8n    │
+                                                └────────────────┘
 ```
 
 **Monorepo structure (pnpm workspaces):**
@@ -85,7 +94,29 @@ Edit `config.json` in the project root:
   "cdpPorts": [9000, 9001, 9002, 9003],  // CDP ports to scan
   "managerUrl": "http://127.0.0.1:8045", // Optional: Antigravity-Manager URL
   "managerPassword": "",              // Optional: Manager API key
-  "vapidKeys": null                   // Auto-generated on first run
+  "vapidKeys": null,                  // Auto-generated on first run
+
+  // API Service (v4.0 — optional)
+  "apiKeys": [
+    { "key": "sk-pilot-change-me", "name": "default" }
+  ],
+  "api": {
+    "enabled": true,
+    "openaiCompat": true,
+    "rateLimit": { "global": 120, "completions": 10 }
+  },
+  "connectionPool": {
+    "healthCheckInterval": 30000,
+    "reconnectMaxAttempts": 0
+  },
+  "webhooks": [
+    {
+      "url": "https://your-server.com/webhook",
+      "secret": "your-hmac-secret",
+      "name": "my-webhook",
+      "events": ["agent_completed", "agent_error"]
+    }
+  ]
 }
 ```
 
@@ -114,6 +145,57 @@ These settings are configured through the Web UI's **Config** page:
 4. **Click Passthrough** — Tappable elements map to CSS selectors; clicks are dispatched via CDP `Input.dispatchMouseEvent` for reliable Electron compatibility
 5. **Auto Actions** — After each snapshot, checks for target buttons and auto-clicks with configurable cooldowns
 
+## API Service
+
+Antigravity Pilot exposes an **OpenAI-compatible API** that lets you control Antigravity IDE programmatically from any OpenAI SDK client, LangChain, Dify, n8n, or [OpenClaw](https://github.com/openclaw/openclaw).
+
+### Quick Usage
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:3563/v1",
+    api_key="sk-pilot-change-me"
+)
+
+# Non-streaming
+response = client.chat.completions.create(
+    model="antigravity",
+    messages=[{"role": "user", "content": "Help me refactor this function"}]
+)
+print(response.choices[0].message.content)
+
+# Streaming
+stream = client.chat.completions.create(
+    model="antigravity",
+    messages=[{"role": "user", "content": "Write a test for this module"}],
+    stream=True
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+### API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/health` | GET | ❌ | Health check |
+| `/api/status` | GET | ✅ | System status & cascade list |
+| `/api/screenshot/:id` | GET | ✅ | CDP screenshot (base64) |
+| `/api/stop/:id` | POST | ✅ | Stop agent generation |
+| `/api/sessions/:id` | GET | ✅ | List chat sessions |
+| `/api/model/:id` | GET/PUT | ✅ | Get/switch model |
+| `/v1/models` | GET | ❌ | List available models (OpenAI compat) |
+| `/v1/chat/completions` | POST | ✅ | Chat completions (OpenAI compat) |
+
+### Testing
+
+```bash
+# Run API test suite against a running server
+node test-api.mjs http://localhost:3563 sk-pilot-change-me
+```
+
 <br />
 
 ## Tech Stack
@@ -124,6 +206,7 @@ These settings are configured through the Web UI's **Config** page:
 | Language | TypeScript (strict mode) |
 | Backend | Express 4 · ws 8 · web-push |
 | Frontend | React 19 · Vite 6 · Zustand 5 |
+| API | OpenAI-compatible · SSE Streaming |
 | i18n | Lightweight custom (zero deps) |
 | DOM Diffing | morphdom |
 | Protocol | Chrome DevTools Protocol (CDP) |

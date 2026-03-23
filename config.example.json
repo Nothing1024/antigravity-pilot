@@ -17,5 +17,34 @@
         "autoAcceptAll": false,
         "autoRetry": false,
         "retryBackoff": true
-    }
+    },
+
+    "// --- API Service (v4.0) ---": "",
+
+    "apiKeys": [
+        {
+            "key": "sk-pilot-change-me",
+            "name": "default"
+        }
+    ],
+
+    "api": {
+        "enabled": true,
+        "openaiCompat": true,
+        "rateLimit": {
+            "global": 120,
+            "completions": 10
+        }
+    },
+
+    "connectionPool": {
+        "maxConnections": 8,
+        "healthCheckInterval": 30000,
+        "healthCheckTimeout": 5000,
+        "reconnectDelay": 1000,
+        "reconnectMaxDelay": 60000,
+        "reconnectMaxAttempts": 0
+    },
+
+    "webhooks": []
 }

@@ -1,5 +1,5 @@
 import type { QuotaInfo } from "./api";
-import type { CascadeListItem } from "./cascade";
+import type { CascadeListItem, ConnectionState, ResponsePhase } from "./cascade";
 import type { Snapshot } from "./snapshot";
 
 export type CascadeListMessage = {
@@ -37,10 +37,26 @@ export type AutoActionMessage = {
   title: string;
 };
 
+export type PhaseChangeMessage = {
+  type: "phase_change";
+  cascadeId: string;
+  phase: ResponsePhase;
+  previousPhase: ResponsePhase;
+};
+
+export type ConnectionStateMessage = {
+  type: "connection_state";
+  cascadeId: string;
+  state: ConnectionState;
+  previousState: ConnectionState;
+};
+
 export type WSMessage =
   | CascadeListMessage
   | SnapshotUpdateMessage
   | CssUpdateMessage
   | AiCompleteMessage
   | QuotaUpdateMessage
-  | AutoActionMessage;
+  | AutoActionMessage
+  | PhaseChangeMessage
+  | ConnectionStateMessage;

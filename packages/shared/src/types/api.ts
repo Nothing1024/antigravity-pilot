@@ -116,3 +116,157 @@ export type AutoActionSettings = {
 export type GetAutoActionsResponse = AutoActionSettings | ApiErrorResponse;
 export type SetAutoActionsResponse = AutoActionSettings | ApiErrorResponse;
 
+// --- System Status API (F3) ---
+
+import type { ConnectionState, ResponsePhase } from "./cascade";
+
+export type CascadeStatus = {
+  id: string;
+  title: string;
+  phase: ResponsePhase;
+  connected: boolean;
+  connectionState: ConnectionState;
+  lastSnapshot: string | null;
+  metadata: {
+    chatTitle: string;
+    windowTitle: string;
+    isActive: boolean;
+  };
+};
+
+export type ConnectionPoolStatus = {
+  active: number;
+  unhealthy: number;
+  reconnecting: number;
+  disconnected: number;
+  maxConnections: number;
+};
+
+export type SystemStatusResponse = {
+  version: string;
+  uptime: number;
+  cascades: CascadeStatus[];
+  connectionPool: ConnectionPoolStatus;
+};
+
+// --- Screenshot API (F3) ---
+
+export type ScreenshotResponse =
+  | {
+      image: string;
+      width: number;
+      height: number;
+      timestamp: string;
+    }
+  | ApiErrorResponse;
+
+// --- OpenAI-Compatible API Types (F4) ---
+
+export type OAIMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type OAIChatCompletionRequest = {
+  model: string;
+  messages: OAIMessage[];
+  stream?: boolean;
+  max_tokens?: number | null;
+  temperature?: number | null;
+};
+
+export type OAIChatCompletionChoice = {
+  index: number;
+  message: OAIMessage;
+  finish_reason: "stop" | "error" | "length" | null;
+};
+
+export type OAIChatCompletionResponse = {
+  id: string;
+  object: "chat.completion";
+  created: number;
+  model: string;
+  choices: OAIChatCompletionChoice[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+};
+
+export type OAIStreamDelta = {
+  role?: string;
+  content?: string;
+};
+
+export type OAIStreamChunk = {
+  id: string;
+  object: "chat.completion.chunk";
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    delta: OAIStreamDelta;
+    finish_reason: "stop" | "error" | null;
+  }>;
+};
+
+export type OAIModelObject = {
+  id: string;
+  object: "model";
+  created: number;
+  owned_by: string;
+};
+
+export type OAIModelListResponse = {
+  object: "list";
+  data: OAIModelObject[];
+};
+
+// --- API Key Config ---
+
+export type ApiKeyConfig = {
+  key: string;
+  name: string;
+};
+
+// --- Session API Types (Phase 2) ---
+
+export type SessionItem = {
+  title: string;
+  selector: string;
+  active: boolean;
+};
+
+export type SessionListResponse = {
+  sessions: SessionItem[];
+  switcherSelector: string | null;
+  hint: string | null;
+};
+
+// --- Model API Types (Phase 2) ---
+
+export type ModelInfo = {
+  model: string | null;
+  source: string;
+};
+
+export type ModelOption = {
+  name: string;
+  selected: boolean;
+  selector: string;
+};
+
+export type ModelListResponse = {
+  current: string | null;
+  models: ModelOption[];
+};
+
+// --- Rate Limit Info ---
+
+export type RateLimitInfo = {
+  limit: number;
+  remaining: number;
+  reset: string;
+};
+

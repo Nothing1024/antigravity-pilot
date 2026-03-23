@@ -25,6 +25,44 @@ export type UserConfigFile = {
   vapidSubject?: string;
   authSecret?: string;
   autoActions?: Partial<AutoActionSettings>;
+
+  // F1: Connection Pool
+  connectionPool?: Partial<ConnectionPoolConfig>;
+
+  // F4/F5: API Service
+  apiKeys?: Array<{ key: string; name: string }>;
+  api?: Partial<ApiConfig>;
+
+  // F6: Webhooks
+  webhooks?: WebhookConfigEntry[];
+};
+
+export type ConnectionPoolConfig = {
+  maxConnections: number;
+  healthCheckInterval: number;
+  healthCheckTimeout: number;
+  reconnectDelay: number;
+  reconnectMaxDelay: number;
+  reconnectMaxAttempts: number;
+};
+
+export type RateLimitConfig = {
+  global: number;          // req/min for all endpoints
+  completions: number;     // req/min for /v1/chat/completions
+};
+
+export type ApiConfig = {
+  enabled: boolean;
+  openaiCompat: boolean;
+  rateLimit: RateLimitConfig;
+};
+
+export type WebhookConfigEntry = {
+  url: string;
+  secret?: string;
+  name: string;
+  events?: string[];
+  enabled?: boolean;
 };
 
 export type AppConfig = {
@@ -45,6 +83,16 @@ export type AppConfig = {
   authSecret: string;
 
   autoActions: AutoActionSettings;
+
+  // F1: Connection Pool
+  connectionPool: ConnectionPoolConfig;
+
+  // F4/F5: API Service
+  apiKeys: Array<{ key: string; name: string }>;
+  api: ApiConfig;
+
+  // F6: Webhooks
+  webhooks: WebhookConfigEntry[];
 };
 
 function getRepoRootPathFromHere(): string {
@@ -137,6 +185,28 @@ export function loadConfig(): AppConfig {
     retryBackoff: userConfig.autoActions?.retryBackoff ?? true,
   };
 
+  const connectionPool: ConnectionPoolConfig = {
+    maxConnections: userConfig.connectionPool?.maxConnections ?? 8,
+    healthCheckInterval: userConfig.connectionPool?.healthCheckInterval ?? 30_000,
+    healthCheckTimeout: userConfig.connectionPool?.healthCheckTimeout ?? 5_000,
+    reconnectDelay: userConfig.connectionPool?.reconnectDelay ?? 1_000,
+    reconnectMaxDelay: userConfig.connectionPool?.reconnectMaxDelay ?? 60_000,
+    reconnectMaxAttempts: userConfig.connectionPool?.reconnectMaxAttempts ?? 0,
+  };
+
+  const apiKeys = userConfig.apiKeys || [];
+
+  const api: ApiConfig = {
+    enabled: userConfig.api?.enabled ?? true,
+    openaiCompat: userConfig.api?.openaiCompat ?? true,
+    rateLimit: {
+      global: userConfig.api?.rateLimit?.global ?? 120,
+      completions: userConfig.api?.rateLimit?.completions ?? 10,
+    },
+  };
+
+  const webhooks = userConfig.webhooks || [];
+
   webpush.setVapidDetails(vapidSubject, vapidKeys.publicKey, vapidKeys.privateKey);
 
   return {
@@ -151,7 +221,11 @@ export function loadConfig(): AppConfig {
     vapidKeys,
     vapidSubject,
     authSecret,
-    autoActions
+    autoActions,
+    connectionPool,
+    apiKeys,
+    api,
+    webhooks,
   };
 }
 
