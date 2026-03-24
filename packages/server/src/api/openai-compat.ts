@@ -347,9 +347,6 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
     });
   }
 
-  // Give LS a moment to materialize new steps after the send.
-  await new Promise((r) => setTimeout(r, 150));
-
   const baseOffset = baselineStepCount;
   const bufferedSteps: Array<TrajectoryStep | undefined> = [];
   let lastKnownEnd = baselineStepCount;

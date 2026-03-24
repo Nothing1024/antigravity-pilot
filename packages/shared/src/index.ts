@@ -1,5 +1,7 @@
 export * from "./constants.js";
 
+export * from "./utils/workspaceId.js";
+
 export * from "./types/api.js";
 export * from "./types/cascade.js";
 export * from "./types/snapshot.js";

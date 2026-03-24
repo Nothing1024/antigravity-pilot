@@ -10,6 +10,7 @@
     "dev:server": "pnpm --filter @ag/server dev",
     "dev:web": "pnpm --filter @ag/web dev",
     "build": "pnpm --filter @ag/shared build && pnpm --filter @ag/web build && pnpm --filter @ag/server build",
+    "test": "pnpm build && node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/workspaceId.test.js",
     "start": "node packages/server/dist/index.js"
   },
   "dependencies": {

@@ -8,6 +8,9 @@
 import { LSDiscovery, type LSInstance } from "./discovery";
 import { RPCClient, RPCError } from "./client";
 import { config } from "../config";
+import { normalizeWorkspaceId, uriToWorkspaceId } from "@ag/shared";
+
+export { normalizeWorkspaceId, uriToWorkspaceId };
 
 // Module-scoped singletons — shared by all route modules
 export const discovery = new LSDiscovery(config.rpc.discoveryInterval);
@@ -19,25 +22,6 @@ export const rpc = new RPCClient(discovery);
  * and used to route RPC calls to the correct LS instance.
  */
 export const conversationAffinity = new Map<string, string>(); // cascadeId → workspaceId
-
-/** Convert a workspace URI to the LS workspaceId format. */
-export function uriToWorkspaceId(uri: string): string {
-  return uri.replace(/^file:\/\/\//, "file_").replace(/\//g, "_");
-}
-
-/**
- * Normalize a workspace ID to a canonical form for comparison.
- *
- * Two sources produce structurally different IDs for the same workspace:
- *   CLI --workspace_id : file_e_3A_Work_novels  (percent-encoded colon, lowercase drive)
- *   uriToWorkspaceId() : file_E:_Work_novels    (literal colon, original case)
- *
- * Normalization: lowercase everything, replace literal `:` with `_3a`.
- * After normalization both examples become `file_e_3a_work_novels`.
- */
-export function normalizeWorkspaceId(id: string): string {
-  return id.replace(/:/g, "_3a").toLowerCase();
-}
 
 /**
  * Route an RPC call to the correct LS for a given conversation.

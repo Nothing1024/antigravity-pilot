@@ -21,6 +21,7 @@ import {
   rememberSuccessfulTransport,
   type TransportProtocol,
 } from "./transport-hints";
+import { uriToWorkspaceId } from "@ag/shared";
 
 export interface LSInstance {
   pid: number;
@@ -213,11 +214,6 @@ async function probeConnectRpcPort(
   );
   const found = results.find((result) => result.ok);
   return found?.port ?? candidates[0];
-}
-
-/** Convert a workspace URI to the LS workspaceId format. */
-function uriToWorkspaceId(uri: string): string {
-  return uri.replace(/^file:\/\/\//, "file_").replace(/\//g, "_");
 }
 
 /**
