@@ -4,6 +4,7 @@ import { checkAndExecuteAutoActions } from "../autoaction/index";
 import { captureCSS, captureComputedVars } from "../capture/css";
 import { captureHTML } from "../capture/html";
 import type { CDPConnection } from "../cdp/types";
+import { config } from "../config";
 import { sendPushNotification } from "../push/sender";
 import { cascadeStore } from "../store/cascades";
 import { broadcast } from "../ws/broadcast";
@@ -51,7 +52,18 @@ async function extractQuotaInfo(cdp: CDPConnection): Promise<QuotaInfo | null> {
   }
 }
 
+let warnedSnapshotDisabled = false;
+
 export async function updateSnapshots(): Promise<void> {
+  if (!config.cdp.enabled) return;
+  if (!config.cdp.enableSnapshot) {
+    if (!warnedSnapshotDisabled) {
+      warnedSnapshotDisabled = true;
+      console.log("Snapshot disabled");
+    }
+    return;
+  }
+  warnedSnapshotDisabled = false;
   // Parallel updates
   await Promise.all(
     cascadeStore.getAll().map(async (c) => {

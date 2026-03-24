@@ -134,10 +134,10 @@ workspaceRouter.get("/api/workspaces", (_req, res) => {
 const launchedPorts = new Set<number>();
 
 /**
- * Find an available CDP port (not in config.cdpPorts and not already launched).
+ * Find an available CDP port (not in config.cdp.ports and not already launched).
  */
 function findAvailablePort(): number {
-  const usedPorts = new Set([...config.cdpPorts, ...launchedPorts]);
+  const usedPorts = new Set([...config.cdp.ports, ...launchedPorts]);
   // Start from 9100 to avoid conflicts with default ports
   for (let port = 9100; port < 9200; port++) {
     if (!usedPorts.has(port)) return port;
@@ -223,10 +223,10 @@ workspaceRouter.post("/api/workspace/launch", async (req, res) => {
       }).unref();
     }
 
-    // Track the port and add to config.cdpPorts for discovery
+    // Track the port and add to config.cdp.ports for discovery
     launchedPorts.add(port);
-    if (!config.cdpPorts.includes(port)) {
-      config.cdpPorts.push(port);
+    if (!config.cdp.ports.includes(port)) {
+      config.cdp.ports.push(port);
     }
 
     console.log(

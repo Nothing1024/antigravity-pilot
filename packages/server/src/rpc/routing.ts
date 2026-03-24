@@ -7,9 +7,10 @@
 
 import { LSDiscovery, type LSInstance } from "./discovery";
 import { RPCClient, RPCError } from "./client";
+import { config } from "../config";
 
 // Module-scoped singletons — shared by all route modules
-export const discovery = new LSDiscovery();
+export const discovery = new LSDiscovery(config.rpc.discoveryInterval);
 export const rpc = new RPCClient(discovery);
 
 /**

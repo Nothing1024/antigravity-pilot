@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { WebSocketServer } from "ws";
 
-import { DISCOVERY_INTERVAL, POLL_INTERVAL } from "@ag/shared";
+import { POLL_INTERVAL } from "@ag/shared";
 
 import { authMiddleware, authRouter } from "./api/auth";
 import { parseCookies, verifyToken } from "./auth/token";
 import { config } from "./config";
-import { discover } from "./loop/discovery";
+import { discover } from "./cdp/discovery";
 import { updateSnapshots } from "./loop/snapshot";
 import { globalRateLimit, completionsRateLimit } from "./middleware/ratelimit";
 import { updatePhases } from "./monitor/phase";
@@ -173,7 +173,8 @@ async function main(): Promise<void> {
 
   // Start loops
   discover();
-  setInterval(discover, DISCOVERY_INTERVAL);
+  const discoveryIntervalMs = Math.max(1000, config.rpc.discoveryInterval);
+  setInterval(discover, discoveryIntervalMs);
 
   // Self-scheduling snapshot loop: prevents overlapping when CDP calls are slow
   async function snapshotLoop(): Promise<void> {

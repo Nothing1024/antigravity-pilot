@@ -18,7 +18,6 @@ export type UserConfigFile = {
   password?: string;
   port?: number;
   antigravityPath?: string;
-  cdpPorts?: number[];
   managerUrl?: string;
   managerPassword?: string;
   vapidKeys?: VapidKeys;
@@ -35,6 +34,9 @@ export type UserConfigFile = {
 
   // RPC
   rpc?: Partial<RpcConfig>;
+
+  // CDP
+  cdp?: Partial<CdpConfig>;
 
   // F6: Webhooks
   webhooks?: WebhookConfigEntry[];
@@ -61,7 +63,17 @@ export type ApiConfig = {
 };
 
 export type RpcConfig = {
-  preferRpcForMessages: boolean;
+  enabled: boolean;
+  fallbackToCDP: boolean;
+  discoveryInterval: number;
+  activePollInterval: number;
+  idlePollInterval: number;
+};
+
+export type CdpConfig = {
+  enabled: boolean;
+  enableSnapshot: boolean;
+  ports: number[];
 };
 
 export type WebhookConfigEntry = {
@@ -78,7 +90,6 @@ export type AppConfig = {
 
   password: string;
   port: number;
-  cdpPorts: number[];
   antigravityPath: string | null;
 
   managerUrl: string;
@@ -100,6 +111,9 @@ export type AppConfig = {
 
   // RPC
   rpc: RpcConfig;
+
+  // CDP
+  cdp: CdpConfig;
 
   // F6: Webhooks
   webhooks: WebhookConfigEntry[];
@@ -167,10 +181,6 @@ export function loadConfig(): AppConfig {
   const portRaw = userConfig.port ?? process.env.PORT ?? DEFAULT_PORT;
   const port = Number(portRaw) || DEFAULT_PORT;
 
-  const cdpPorts = Array.isArray(userConfig.cdpPorts)
-    ? userConfig.cdpPorts
-    : Array.from(DEFAULT_CDP_PORTS);
-
   const antigravityPath =
     userConfig.antigravityPath ||
     process.env.ANTIGRAVITY_PATH ||
@@ -216,7 +226,19 @@ export function loadConfig(): AppConfig {
   };
 
   const rpc: RpcConfig = {
-    preferRpcForMessages: userConfig.rpc?.preferRpcForMessages ?? true,
+    enabled: userConfig.rpc?.enabled ?? true,
+    fallbackToCDP: userConfig.rpc?.fallbackToCDP ?? true,
+    discoveryInterval: userConfig.rpc?.discoveryInterval ?? 10_000,
+    activePollInterval: userConfig.rpc?.activePollInterval ?? 50,
+    idlePollInterval: userConfig.rpc?.idlePollInterval ?? 5_000,
+  };
+
+  const cdp: CdpConfig = {
+    enabled: userConfig.cdp?.enabled ?? true,
+    enableSnapshot: userConfig.cdp?.enableSnapshot ?? false,
+    ports: Array.isArray(userConfig.cdp?.ports)
+      ? userConfig.cdp.ports
+      : Array.from(DEFAULT_CDP_PORTS),
   };
 
   const webhooks = userConfig.webhooks || [];
@@ -228,7 +250,6 @@ export function loadConfig(): AppConfig {
     pushSubsPath,
     password,
     port,
-    cdpPorts,
     antigravityPath,
     managerUrl,
     managerPassword,
@@ -240,6 +261,7 @@ export function loadConfig(): AppConfig {
     apiKeys,
     api,
     rpc,
+    cdp,
     webhooks,
   };
 }

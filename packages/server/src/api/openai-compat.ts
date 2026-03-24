@@ -19,8 +19,9 @@ import { randomBytes } from "node:crypto";
 
 import express from "express";
 
-import { type TrajectoryStep } from "@ag/shared";
+import { ResponsePhase, type TrajectoryStep } from "@ag/shared";
 
+import { config } from "../config";
 import { sendMessageWithFallback } from "../rpc/fallback";
 import { rpcForConversation } from "../rpc/routing";
 import { cascadeStore } from "../store/cascades";
@@ -126,6 +127,190 @@ openaiRouter.post("/v1/chat/completions", async (req, res) => {
   if (systemMessages.length > 0) {
     const systemContext = systemMessages.map((m: any) => m.content).join("\n");
     prompt = `[System Context: ${systemContext}]\n\n${prompt}`;
+  }
+
+  // ── CDP-only mode ──
+  // When rpc.enabled=false we must avoid any RPC calls and rely on the CDP phase monitor.
+  if (!config.rpc.enabled) {
+    if (!config.cdp.enabled) {
+      return res.status(503).json({
+        error: {
+          message: "Both RPC and CDP are disabled",
+          type: "server_error",
+          code: "no_backend",
+        },
+      });
+    }
+
+    if (!targetCascade) {
+      return res.status(503).json({
+        error: {
+          message: "No active Antigravity IDE sessions found",
+          type: "server_error",
+          code: "no_cascades",
+        },
+      });
+    }
+
+    // Reset previous response buffer to avoid leaking history.
+    const c = cascadeStore.get(targetCascade.id);
+    if (c) c.responseText = "";
+
+    const injected = await sendMessageWithFallback(targetCascade.id, prompt);
+    if (!injected?.ok) {
+      return res.status(500).json({
+        error: {
+          message: "Failed to send message into Antigravity IDE",
+          type: "server_error",
+          code: "injection_failed",
+        },
+      });
+    }
+
+    const completionId = makeCompletionId();
+    const created = Math.floor(Date.now() / 1000);
+
+    const isTerminalPhase = (phase: ResponsePhase | undefined): boolean =>
+      phase === ResponsePhase.COMPLETED ||
+      phase === ResponsePhase.IDLE ||
+      phase === ResponsePhase.ERROR ||
+      phase === ResponsePhase.QUOTA_ERROR;
+
+    if (stream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+
+      const sendChunk = (delta: any, finishReason: string | null = null) => {
+        if (res.writableEnded) return;
+        const chunk = {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created,
+          model: model || "antigravity",
+          choices: [
+            {
+              index: 0,
+              delta,
+              finish_reason: finishReason,
+            },
+          ],
+        };
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      };
+
+      sendChunk({ role: "assistant", content: "" });
+
+      let sentLength = 0;
+      let stableCount = 0;
+      let completed = false;
+      const startTime = Date.now();
+      const TIMEOUT = 600_000; // 10 minutes
+      const POLL_INTERVAL = 250;
+
+      const cleanup = () => {
+        completed = true;
+      };
+      req.on("close", cleanup);
+
+      const poll = async () => {
+        if (completed || res.writableEnded) return;
+
+        if (Date.now() - startTime > TIMEOUT) {
+          completed = true;
+          sendChunk({ content: "\n\n[Timeout exceeded]" }, "error");
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        const cur = cascadeStore.get(targetCascade.id);
+        const text = cur?.responseText ?? "";
+        const phase = cur?.phase;
+
+        if (text.length > sentLength) {
+          sendChunk({ content: text.slice(sentLength) });
+          sentLength = text.length;
+          stableCount = 0;
+        } else {
+          stableCount++;
+        }
+
+        if (isTerminalPhase(phase) && sentLength > 0 && stableCount >= 4) {
+          completed = true;
+          sendChunk({}, "stop");
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        setTimeout(poll, POLL_INTERVAL);
+      };
+
+      setTimeout(poll, POLL_INTERVAL);
+      return;
+    }
+
+    // Non-streaming (CDP-only)
+    const startTime = Date.now();
+    const TIMEOUT = 600_000; // 10 minutes
+    const POLL_INTERVAL = 250;
+    let stableCount = 0;
+    let lastLen = 0;
+    let responseText = "";
+
+    while (true) {
+      if (Date.now() - startTime > TIMEOUT) {
+        return res.status(500).json({
+          error: {
+            message: "Agent timeout or error: timeout",
+            type: "server_error",
+            code: "timeout",
+          },
+        });
+      }
+
+      const cur = cascadeStore.get(targetCascade.id);
+      const phase = cur?.phase;
+      responseText = cur?.responseText ?? "";
+
+      if (responseText.length === lastLen) stableCount++;
+      else {
+        stableCount = 0;
+        lastLen = responseText.length;
+      }
+
+      if (isTerminalPhase(phase) && responseText.length > 0 && stableCount >= 4) {
+        break;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+    }
+
+    res.json({
+      id: completionId,
+      object: "chat.completion",
+      created,
+      model: model || "antigravity",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: responseText.trim(),
+          },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+    });
+    return;
   }
 
   const RUNNING_STATUS = "CASCADE_RUN_STATUS_RUNNING";

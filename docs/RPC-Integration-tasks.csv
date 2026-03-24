@@ -190,31 +190,31 @@
 48,P7:清理与配置化,删除旧发现逻辑,"【做什么】删除 loop/discovery.ts
 【为什么】已被 rpc/discovery.ts 替代，不再需要
 【具体操作】①执行 rm packages/server/src/loop/discovery.ts ②检查是否有其他文件 import 它 ③如果有则删除 import
-【验收标准】文件不存在，编译通过",packages/server/src/loop/discovery.ts,47,ls packages/server/src/loop/discovery.ts → 文件不存在,删除前必须确认没有其他文件 import 它，否则编译会报错,P1,待开始
+【验收标准】文件不存在，编译通过",packages/server/src/loop/discovery.ts,47,ls packages/server/src/loop/discovery.ts → 文件不存在,删除前必须确认没有其他文件 import 它，否则编译会报错,P1,已完成
 49,P7:清理与配置化,精简快照循环,"【做什么】在 snapshot.ts 添加配置检查
 【为什么】让快照功能可配置
 【具体操作】①打开 packages/server/src/loop/snapshot.ts ②在函数开头添加 if (!config.cdp.enableSnapshot) return ③在 config.ts 添加 cdp.enableSnapshot 配置项
-【验收标准】配置项生效，编译通过",packages/server/src/loop/snapshot.ts; packages/server/src/config.ts,48,grep ""enableSnapshot"" packages/server/src/config.ts → 有输出,默认值设为 false，因为 RPC 已经提供数据,P1,待开始
+【验收标准】配置项生效，编译通过",packages/server/src/loop/snapshot.ts; packages/server/src/config.ts,48,grep ""enableSnapshot"" packages/server/src/config.ts → 有输出,默认值设为 false，因为 RPC 已经提供数据,P1,已完成
 50,P7:清理与配置化,添加完整配置项,"【做什么】在 config.ts 添加所有 RPC 和 CDP 配置
 【为什么】让所有功能可配置
 【具体操作】①打开 packages/server/src/config.ts ②添加 rpc 配置块（enabled, fallbackToCDP, discoveryInterval, activePollInterval, idlePollInterval） ③添加 cdp 配置块（enabled, enableSnapshot, ports） ④设置合理的默认值
-【验收标准】配置项完整，编译通过",packages/server/src/config.ts,49,grep ""rpc.*enabled\|cdp.*enabled"" packages/server/src/config.ts → 有输出,默认值：rpc.enabled=true, cdp.enabled=true, cdp.enableSnapshot=false,P1,待开始
+【验收标准】配置项完整，编译通过",packages/server/src/config.ts,49,grep ""rpc.*enabled\|cdp.*enabled"" packages/server/src/config.ts → 有输出,默认值：rpc.enabled=true, cdp.enabled=true, cdp.enableSnapshot=false,P1,已完成
 51,P7:清理与配置化,更新 README 文档,"【做什么】在 README.md 添加 RPC 配置说明
 【为什么】用户需要知道如何配置
 【具体操作】①打开 README.md ②添加 Configuration 章节 ③说明 rpc 和 cdp 配置项 ④提供配置示例
-【验收标准】文档更新完整",README.md,50,grep ""RPC"" README.md → 有输出,配置示例要完整，包含所有配置项,P2,待开始
+【验收标准】文档更新完整",README.md,50,grep ""RPC"" README.md → 有输出,配置示例要完整，包含所有配置项,P2,已完成
 52,P7:清理与配置化,测试纯 RPC 模式,"【做什么】测试关闭 CDP 快照后是否正常工作
 【为什么】验证 RPC 模式独立可用
 【具体操作】①修改 config.json，设置 cdp.enableSnapshot: false ②启动服务器 ③测试所有功能
-【验收标准】功能正常，无报错",config.json,51,日志显示 ""Snapshot disabled"",如果功能异常，检查是否有代码仍依赖快照,P1,待开始
+【验收标准】功能正常，无报错",config.json,51,日志显示 ""Snapshot disabled"",如果功能异常，检查是否有代码仍依赖快照,P1,已完成
 53,P7:清理与配置化,测试纯 CDP 模式,"【做什么】测试关闭 RPC 后是否回退到 CDP
 【为什么】验证降级机制完整
 【具体操作】①修改 config.json，设置 rpc.enabled: false ②启动服务器 ③测试所有功能
-【验收标准】功能正常，全部走 CDP",config.json,52,日志显示所有操作都走 CDP,如果功能异常，检查降级逻辑是否完整,P1,待开始
+【验收标准】功能正常，全部走 CDP",config.json,52,日志显示所有操作都走 CDP,如果功能异常，检查降级逻辑是否完整,P1,已完成
 54,P7:清理与配置化,Phase 7 回归验证,"【做什么】验证 Phase 7 所有改动正确
 【为什么】确保清理和配置化完成
 【具体操作】①执行 pnpm build ②测试两种模式 ③执行 git add -A && git commit -m ""refactor: Phase 7 - 清理与配置化""
-【验收标准】编译通过，两种模式都正常",所有 Phase 7 涉及文件,52;53,pnpm build → 无错误; 两种模式测试通过,Phase 完成后必须 commit,P0,待开始
+【验收标准】编译通过，两种模式都正常",所有 Phase 7 涉及文件,52;53,pnpm build → 无错误; 两种模式测试通过,Phase 完成后必须 commit,P0,已完成
 55,最终验收,运行完整测试套件,"【做什么】运行所有测试，确保无回归
 【为什么】最终验收，确保所有功能正常
 【具体操作】①执行 pnpm test ②检查测试通过率 ③检查覆盖率是否 >80%

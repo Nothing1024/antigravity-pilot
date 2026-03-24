@@ -91,10 +91,25 @@ Edit `config.json` in the project root:
   "password": "your-password",        // Login password
   "port": 3563,                       // Web server port
   "antigravityPath": "",              // Path to Antigravity executable (empty = auto-detect)
-  "cdpPorts": [9000, 9001, 9002, 9003],  // CDP ports to scan
   "managerUrl": "http://127.0.0.1:8045", // Optional: Antigravity-Manager URL
   "managerPassword": "",              // Optional: Manager API key
   "vapidKeys": null,                  // Auto-generated on first run
+
+  // RPC + Delta Polling (structured API; recommended)
+  "rpc": {
+    "enabled": true,                  // Enable RPC features (steps, status, OpenAI compat backend)
+    "fallbackToCDP": true,            // Allow CDP fallback when RPC fails
+    "discoveryInterval": 10000,       // Discovery loop interval (ms)
+    "activePollInterval": 50,         // Active polling interval (ms)
+    "idlePollInterval": 5000          // Idle heartbeat interval (ms)
+  },
+
+  // CDP (UI mirror + fallback)
+  "cdp": {
+    "enabled": true,                  // Enable CDP connections
+    "enableSnapshot": false,          // Enable HTML snapshot loop (Shadow DOM mirror)
+    "ports": [9000, 9001, 9002, 9003] // CDP ports to scan
+  },
 
   // API Service (v4.0 — optional)
   "apiKeys": [

@@ -13,6 +13,7 @@
 import { ResponsePhase } from "@ag/shared";
 
 import { eventBus } from "../events/bus";
+import { config } from "../config";
 import { rpcForConversation } from "../rpc/routing";
 import { cascadeStore } from "../store/cascades";
 
@@ -391,6 +392,11 @@ export async function updatePhases(): Promise<void> {
   await Promise.all(
     cascades.map(async (c) => {
       try {
+        if (!config.rpc.enabled) {
+          await detectPhase(c.id);
+          return;
+        }
+
         const status = await getRpcStatus(c.id);
         console.log(`Status from RPC: ${status}`);
 

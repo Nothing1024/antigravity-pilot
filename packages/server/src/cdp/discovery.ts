@@ -4,10 +4,10 @@ import type { CascadeEntry } from "../store/cascades";
 
 import { ConnectionState, ResponsePhase } from "@ag/shared";
 import { config } from "../config";
-import { connectCDP } from "../cdp/connection";
-import { extractMetadata } from "../cdp/metadata";
-import { injectSimplify } from "../cdp/simplify";
-import { getSimplifyMode } from "../cdp/simplifyState";
+import { connectCDP } from "./connection";
+import { extractMetadata } from "./metadata";
+import { injectSimplify } from "./simplify";
+import { getSimplifyMode } from "./simplifyState";
 import { captureCSS, captureComputedVars } from "../capture/css";
 import { cascadeStore } from "../store/cascades";
 import { broadcastCascadeList } from "../ws/broadcast";
@@ -19,11 +19,34 @@ import { cascadeListSignature, resolveChatTitle } from "../utils/title";
 // Entries are removed when the target connects successfully or disappears from CDP.
 const pendingTargets = new Set<string>();
 
+/**
+ * Discover and maintain CDP-connected cascades (Antigravity IDE sessions).
+ *
+ * Note: CDP is still required for UI mirror (Shadow DOM snapshot) and as a
+ * degradation fallback when RPC is unavailable.
+ */
 export async function discover(): Promise<void> {
+  if (!config.cdp.enabled) {
+    // CDP disabled: close existing connections and clear store to avoid leaking resources.
+    const oldMap = new Map(cascadeStore.entries());
+    if (oldMap.size > 0) {
+      for (const [, c] of oldMap.entries()) {
+        try {
+          c.cdp.ws.close();
+        } catch {
+          // ignore
+        }
+      }
+      cascadeStore.clear();
+      broadcastCascadeList();
+    }
+    return;
+  }
+
   // 1. Find all targets
   const allTargets: any[] = [];
   await Promise.all(
-    config.cdpPorts.map(async (port) => {
+    config.cdp.ports.map(async (port) => {
       const list = await getJson<any[]>(`http://127.0.0.1:${port}/json/list`);
       // Match real workbench pages but exclude jetski-agent pages
       // (Settings, Manager, Launchpad use workbench-jetski-agent.html or
@@ -39,7 +62,7 @@ export async function discover(): Promise<void> {
         .forEach((t) => {
           allTargets.push({ ...t, port });
         });
-    })
+    }),
   );
 
   const oldMap = new Map(cascadeStore.entries());
@@ -60,7 +83,7 @@ export async function discover(): Promise<void> {
             extractedTitle: meta.chatTitle,
             previousTitle: existing.metadata.chatTitle,
             windowTitle: target.title || existing.metadata.windowTitle,
-            cascadeId: id
+            cascadeId: id,
           });
 
           existing.metadata = {
@@ -68,7 +91,7 @@ export async function discover(): Promise<void> {
             chatTitle: resolvedTitle.title,
             titleSource: resolvedTitle.source,
             isActive: meta.isActive,
-            mode: meta.mode
+            mode: meta.mode,
           };
 
           // Update connection state to CONNECTED (it was open)
@@ -99,7 +122,7 @@ export async function discover(): Promise<void> {
           extractedTitle: meta.chatTitle,
           previousTitle: "",
           windowTitle: target.title,
-          cascadeId: id
+          cascadeId: id,
         });
         const now = Date.now();
         const cascade: CascadeEntry = {
@@ -110,7 +133,7 @@ export async function discover(): Promise<void> {
             chatTitle: resolvedTitle.title,
             titleSource: resolvedTitle.source,
             isActive: meta.isActive,
-            mode: meta.mode
+            mode: meta.mode,
           },
           snapshot: null,
           css: await captureCSS(cdp),
@@ -142,9 +165,7 @@ export async function discover(): Promise<void> {
         };
         newCascades.set(id, cascade);
         pendingTargets.delete(id); // connected successfully
-        console.log(
-          `✅ Added cascade: ${resolvedTitle.title} (${resolvedTitle.source})`
-        );
+        console.log(`✅ Added cascade: ${resolvedTitle.title} (${resolvedTitle.source})`);
 
         // Auto-apply simplify mode to newly discovered cascades
         const simplifyMode = getSimplifyMode();
@@ -152,7 +173,9 @@ export async function discover(): Promise<void> {
           try {
             const result = await injectSimplify(cdp, simplifyMode);
             if (result.ok) {
-              console.log(`🎨 Auto-applied simplify (${simplifyMode}) to new cascade "${resolvedTitle.title}"`);
+              console.log(
+                `🎨 Auto-applied simplify (${simplifyMode}) to new cascade "${resolvedTitle.title}"`,
+              );
             }
           } catch {
             // Non-critical: simplify failure shouldn't block discovery
@@ -179,7 +202,9 @@ export async function discover(): Promise<void> {
   }
 
   // Clean up pending tracking for targets that disappeared from CDP
-  const currentTargetIds = new Set(allTargets.map((t) => hashString(t.webSocketDebuggerUrl)));
+  const currentTargetIds = new Set(
+    allTargets.map((t) => hashString(t.webSocketDebuggerUrl)),
+  );
   for (const id of pendingTargets) {
     if (!currentTargetIds.has(id)) pendingTargets.delete(id);
   }
@@ -195,4 +220,3 @@ export async function discover(): Promise<void> {
 
   if (changed) broadcastCascadeList();
 }
-

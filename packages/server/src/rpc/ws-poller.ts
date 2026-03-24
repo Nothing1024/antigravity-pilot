@@ -14,15 +14,12 @@ import type { Duplex } from "node:stream";
 import type { TrajectoryStep } from "@ag/shared";
 import { WebSocket, WebSocketServer } from "ws";
 
+import { config } from "../config";
 import { getStepCount, rpcForConversation } from "./routing";
 import { conversationSignals } from "./signals";
 
 type PollState = "idle" | "active";
 
-/** ACTIVE 模式轮询间隔（ms）。 */
-const ACTIVE_INTERVAL = 50;
-/** IDLE 模式心跳间隔（ms）。 */
-const HEARTBEAT_INTERVAL = 5000;
 /** ACTIVE 模式重叠窗口（步数）。 */
 const ACTIVE_OVERLAP = 20;
 
@@ -98,6 +95,11 @@ export function setupConversationWebSocket(
     (ws: WebSocket, _req: IncomingMessage, cascadeId: string) => {
       const shortId = cascadeId.slice(0, 8);
       console.log(`[ws:${shortId}] connected`);
+
+      if (!config.rpc.enabled) {
+        ws.close(1008, "RPC disabled");
+        return;
+      }
 
       let lastStepCount = 0;
       // 一旦证明某个 offset 之前存在“毒数据”，则不再 overlap 到它之前
@@ -237,7 +239,7 @@ export function setupConversationWebSocket(
           }
 
           if (!destroyed && pollState === "active") {
-            scheduleNext(ACTIVE_INTERVAL);
+            scheduleNext(config.rpc.activePollInterval);
           }
         }, delay);
 
@@ -277,7 +279,7 @@ export function setupConversationWebSocket(
           if (!destroyed && pollState === "idle") {
             scheduleHeartbeat();
           }
-        }, HEARTBEAT_INTERVAL);
+        }, config.rpc.idlePollInterval);
 
         unrefTimer(pendingTimer);
       };
