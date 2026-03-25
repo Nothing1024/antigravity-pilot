@@ -16,12 +16,8 @@ const en = {
   "login.footer": "v3.0.0 · Secure Connection",
 
   // AppShell
-  "shell.workspace": "Workspace",
-  "shell.chat": "Chat",
-  "shell.config": "Config",
   "shell.hideSidebar": "Hide sidebar",
   "shell.showSidebar": "Show sidebar",
-  "shell.openProject": "Open Project",
   "shell.sessions": "Sessions",
 
   // Cascade List
@@ -31,6 +27,7 @@ const en = {
   // Drawer Actions
   "drawer.newConversation": "New Conversation",
   "drawer.openProject": "Open Project",
+  "drawer.settings": "Settings",
   "drawer.terminateAll": "Terminate All",
   "drawer.terminateConfirm": "This will kill all Antigravity instances. Are you sure?",
   "drawer.confirm": "Confirm",

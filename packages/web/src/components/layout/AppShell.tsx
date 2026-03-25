@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n } from "../../i18n";
-import { switchConversation } from "../../services/cascadeService";
-import { useCascadeStore } from "../../stores/cascadeStore";
 import { useUIStore } from "../../stores/uiStore";
 import { CascadeList } from "../drawer/CascadeList";
 import { DrawerActions } from "../drawer/DrawerActions";
@@ -35,7 +33,6 @@ function useIsLargeScreen() {
 export function AppShell({ title, children, onOpenProject, view, onViewChange }: Props) {
   const isLarge = useIsLargeScreen();
   const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
-  const currentCascadeId = useCascadeStore((s) => s.currentId);
   const t = useI18n();
 
   // On app startup, push localStorage settings to server (recovers from server restart)
@@ -99,12 +96,15 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
 
       {/* Cascade List */}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        <CascadeList onSelect={closeFn} />
+        <CascadeList onSelect={() => {
+          onViewChange("chat");
+          closeFn?.();
+        }} />
       </div>
 
       {/* Sidebar Footer */}
       <div className="border-t border-border/40 p-3">
-        <DrawerActions onOpenProject={onOpenProject} onDone={closeFn} />
+        <DrawerActions onOpenProject={onOpenProject} onDone={closeFn} view={view} onViewChange={onViewChange} />
       </div>
     </>
   );
@@ -141,63 +141,9 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
           {/* Show toggle when sidebar is hidden */}
           {(!isLarge || !desktopOpen) && toggleButton}
 
-          <div className="flex flex-1 items-center gap-2 min-w-0">
-            <div className="flex items-center gap-2 min-w-0 text-sm">
-              <button
-                type="button"
-                className="font-medium text-muted-foreground/60 hidden sm:inline-block hover:text-primary/80 transition-colors cursor-pointer"
-                title={t("drawer.newConversation")}
-                onClick={() => {
-                  if (!currentCascadeId) return;
-                  void switchConversation(currentCascadeId);
-                }}
-              >
-                {t("shell.workspace")}
-              </button>
-              <span className="text-border hidden sm:inline-block">/</span>
-              <h1 className="truncate font-semibold text-foreground/90 tracking-tight">
-                {title}
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* View Switcher Segmented Control */}
-            <div className="flex items-center rounded-lg bg-muted/50 p-0.5 ring-1 ring-inset ring-border/20">
-              <button
-                onClick={() => onViewChange("chat")}
-                className={[
-                  "inline-flex h-7 items-center justify-center rounded-md px-3 text-xs font-medium transition-all duration-200",
-                  view === "chat"
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                    : "text-muted-foreground hover:text-foreground"
-                ].join(" ")}
-              >
-                {t("shell.chat")}
-              </button>
-              <button
-                onClick={() => onViewChange("settings")}
-                className={[
-                  "inline-flex h-7 items-center justify-center rounded-md px-3 text-xs font-medium transition-all duration-200",
-                  view === "settings"
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                    : "text-muted-foreground hover:text-foreground"
-                ].join(" ")}
-              >
-                {t("shell.config")}
-              </button>
-            </div>
-
-            <button
-              onClick={onOpenProject}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title={t("shell.openProject")}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-              </svg>
-            </button>
-          </div>
+          <h1 className="truncate text-sm font-semibold text-foreground/90 tracking-tight">
+            {title}
+          </h1>
         </header>
 
         {/* ─── Main Content ─── */}
