@@ -1,4 +1,5 @@
 import type { CascadeId, CascadeMetadata, ComputedVars, QuotaInfo, Snapshot } from "@ag/shared";
+import { ConnectionState, ResponsePhase } from "@ag/shared";
 
 import type { CDPConnection } from "../cdp/types";
 
@@ -23,6 +24,23 @@ export interface CascadeEntry {
 
   stableCount: number;
   lastFeedbackFingerprint: string | null;
+
+  // F1: Connection Pool fields
+  connectionState: ConnectionState;
+  lastHealthCheck: number;
+  consecutiveFailures: number;
+  reconnectAttempts: number;
+  connectedAt: number;
+  reconnectTarget: {
+    webSocketDebuggerUrl: string;
+    port: number;
+    title: string;
+  };
+
+  // F2: Response Monitor fields
+  phase: ResponsePhase;
+  responseText: string;
+  lastPhaseChange: number;
 }
 
 class CascadeStore {

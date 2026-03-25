@@ -26,3 +26,23 @@ export interface CascadeMetadata {
   mode: "cascade" | "iframe";
 }
 
+// ── Connection Pool ──
+
+export const ConnectionState = {
+  CONNECTED: "connected",
+  DISCONNECTED: "disconnected",
+  RECONNECTING: "reconnecting",
+} as const;
+
+export type ConnectionState = (typeof ConnectionState)[keyof typeof ConnectionState];
+
+// ── Response Monitor ──
+
+export const ResponsePhase = {
+  IDLE: "idle",
+  THINKING: "thinking",
+  RESPONDING: "responding",
+  COMPLETE: "complete",
+} as const;
+
+export type ResponsePhase = (typeof ResponsePhase)[keyof typeof ResponsePhase];
