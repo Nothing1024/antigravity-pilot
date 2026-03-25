@@ -34,6 +34,8 @@ async function postSend(cascadeId: string, message: string): Promise<void> {
  * should use localStorage/sessionStorage instead.
  */
 const drafts = new Map<string, string>();
+/** Last sent message per cascade — used for undo restoration */
+const sentHistory = new Map<string, string>();
 
 export function MessageInput({ cascadeId }: Props) {
   const t = useI18n();
@@ -61,6 +63,23 @@ export function MessageInput({ cascadeId }: Props) {
     }
   }, [cascadeId]);
 
+  // Listen for undo events — restore last sent message to input
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.cascadeId === cascadeId) {
+        const lastSent = sentHistory.get(cascadeId || "");
+        if (lastSent) {
+          setText(lastSent);
+          sentHistory.delete(cascadeId || "");
+          textareaRef.current?.focus();
+        }
+      }
+    };
+    window.addEventListener("ag-undo", handler);
+    return () => window.removeEventListener("ag-undo", handler);
+  }, [cascadeId, setText]);
+
   const resize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -80,6 +99,8 @@ export function MessageInput({ cascadeId }: Props) {
     if (sending) return;
 
     setSending(true);
+    // Save for undo restoration before clearing
+    if (cascadeId) sentHistory.set(cascadeId, msg);
     setText("");
 
     try {
