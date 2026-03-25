@@ -21,14 +21,20 @@ export async function discover(): Promise<void> {
   await Promise.all(
     config.cdpPorts.map(async (port) => {
       const list = await getJson<any[]>(`http://127.0.0.1:${port}/json/list`);
-      // Match real workbench pages but exclude jetski-agent pages
-      // (Settings, Manager, Launchpad use workbench-jetski-agent.html or
-      //  workbench-jetski.html — we only want regular workbench.html)
+      // Match real workbench pages but exclude system/manager pages.
+      // Two-layer filter:
+      //   1. URL: jetski variants (Settings, Launchpad)
+      //   2. Title: random codenames like "chrono-astro — Antigravity"
+      //      Manager windows use a "word-word <dash> Brand" pattern where
+      //      <dash> can be hyphen (-), en dash (–), or em dash (—).
+      const MANAGER_TITLE = /^[a-z]+-[a-z]+\s+[\u2013\u2014]\s+/;
       const isRealWorkbench = (t: any) => {
         const url = t.url || "";
-        // Must contain workbench.html but NOT jetski variants
         if (url.includes("workbench-jetski")) return false;
-        return url.includes("workbench.html") || t.title?.includes("workbench");
+        if (!url.includes("workbench.html") && !t.title?.includes("workbench")) return false;
+        // Exclude Manager windows by title pattern
+        if (MANAGER_TITLE.test(t.title || "")) return false;
+        return true;
       };
       list
         .filter(isRealWorkbench)
