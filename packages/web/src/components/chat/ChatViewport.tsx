@@ -468,6 +468,11 @@ export function ChatViewport({ cascadeId, onContentUpdate, onFileChanges, onTool
         #chat-viewport [class*="pt-[20vh]"] {
           padding-top: 6vh !important;
         }
+        /* Strip IDE-injected min-height on wrapper divs (e.g. min-height: 540px)
+           that cause excessive bottom whitespace on mobile/tablet/desktop */
+        #chat-viewport div[style*="min-height"] {
+          min-height: 120px !important;
+        }
         
         /* 鈹€鈹€鈹€ Loading State 鈹€鈹€鈹€ */
         .loading { 

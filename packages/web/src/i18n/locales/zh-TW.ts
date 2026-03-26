@@ -18,12 +18,8 @@ const zhTW: Record<LocaleKeys, string> = {
   "login.footer": "v3.0.0 · 安全連線",
 
   // AppShell
-  "shell.workspace": "工作區",
-  "shell.chat": "聊天",
-  "shell.config": "設定",
   "shell.hideSidebar": "隱藏側邊欄",
   "shell.showSidebar": "顯示側邊欄",
-  "shell.openProject": "開啟專案",
   "shell.sessions": "工作階段",
 
   // Cascade List
@@ -33,6 +29,7 @@ const zhTW: Record<LocaleKeys, string> = {
   // Drawer Actions
   "drawer.newConversation": "新建對話",
   "drawer.openProject": "開啟專案",
+  "drawer.settings": "設定",
   "drawer.terminateAll": "終止全部",
   "drawer.terminateConfirm": "此操作將終止所有 Antigravity 實例，確定嗎？",
   "drawer.confirm": "確認",

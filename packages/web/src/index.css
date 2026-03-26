@@ -160,3 +160,10 @@ body {
 ::selection {
   background: hsl(var(--primary) / 0.15);
 }
+
+/* ─── Touch devices: show hover-only UI elements ─── */
+@media (hover: none) {
+  .switch-icon {
+    opacity: 0.5 !important;
+  }
+}

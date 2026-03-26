@@ -18,12 +18,8 @@ const zhCN: Record<LocaleKeys, string> = {
   "login.footer": "v3.0.0 · 安全连接",
 
   // AppShell
-  "shell.workspace": "工作区",
-  "shell.chat": "聊天",
-  "shell.config": "设置",
   "shell.hideSidebar": "隐藏侧栏",
   "shell.showSidebar": "显示侧栏",
-  "shell.openProject": "打开项目",
   "shell.sessions": "会话",
 
   // Cascade List
@@ -33,6 +29,7 @@ const zhCN: Record<LocaleKeys, string> = {
   // Drawer Actions
   "drawer.newConversation": "新建对话",
   "drawer.openProject": "打开项目",
+  "drawer.settings": "设置",
   "drawer.terminateAll": "终止所有",
   "drawer.terminateConfirm": "此操作将终止所有 Antigravity 实例，确定吗？",
   "drawer.confirm": "确认",

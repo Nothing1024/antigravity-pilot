@@ -225,6 +225,11 @@ export function useClickPassthrough({ cascadeId, shadowRef }: Options): Result {
           // ignore
         }
 
+        // Detect undo button click — restore sent text to input
+        if (el.closest("[data-tooltip-id^='undo-tooltip']")) {
+          window.dispatchEvent(new CustomEvent("ag-undo", { detail: { cascadeId: id } }));
+        }
+
         if (fileName) {
           setFilePreview({ open: true, loading: true, error: null, payload: null });
           try {

@@ -37,10 +37,26 @@ export type AutoActionMessage = {
   title: string;
 };
 
+export type PhaseChangeMessage = {
+  type: "phase_change";
+  cascadeId: string;
+  phase: string;
+  previousPhase: string;
+};
+
+export type ConnectionStateMessage = {
+  type: "connection_state";
+  cascadeId: string;
+  state: string;
+  previousState: string;
+};
+
 export type WSMessage =
   | CascadeListMessage
   | SnapshotUpdateMessage
   | CssUpdateMessage
   | AiCompleteMessage
   | QuotaUpdateMessage
-  | AutoActionMessage;
+  | AutoActionMessage
+  | PhaseChangeMessage
+  | ConnectionStateMessage;
