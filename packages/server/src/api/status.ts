@@ -4,11 +4,12 @@
 
 import express from "express";
 
-import type { SystemStatusResponse } from "@ag/shared";
+import type { SystemStatusResponse, CapabilitiesResponse } from "@ag/shared";
 import { ConnectionState } from "@ag/shared";
 
 import { cascadeStore } from "../store/cascades";
 import { getPoolStats } from "../pool/health";
+import { config } from "../config";
 
 export const statusRouter: express.Router = express.Router();
 
@@ -17,6 +18,58 @@ const serverStartTime = Date.now();
 // --- GET /api/health (public, no auth) ---
 statusRouter.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// --- GET /api/capabilities ---
+// Tells the frontend which server features are available, enabling conditional rendering
+// of CDP-only vs RPC-only UI elements.
+statusRouter.get("/api/capabilities", (_req, res) => {
+  const cdpEnabled = config.cdp.enabled;
+  const rpcEnabled = config.rpc.enabled;
+  const snapshotEnabled = config.cdp.enableSnapshot;
+  const fallbackToCDP = config.rpc.fallbackToCDP;
+
+  // Determine the effective mode for frontend decisions
+  let mode: "hybrid" | "cdp-only" | "rpc-only" | "disconnected";
+  if (cdpEnabled && rpcEnabled) mode = "hybrid";
+  else if (cdpEnabled) mode = "cdp-only";
+  else if (rpcEnabled) mode = "rpc-only";
+  else mode = "disconnected";
+
+  // Check live connectivity
+  const hasCdpConnection = cascadeStore.getAll().some((c) => c.cdp?.ws?.readyState === 1);
+
+  const response: CapabilitiesResponse = {
+    mode,
+    cdp: {
+      enabled: cdpEnabled,
+      snapshot: snapshotEnabled,
+      connected: hasCdpConnection,
+    },
+    rpc: {
+      enabled: rpcEnabled,
+      fallbackToCDP: fallbackToCDP,
+    },
+    features: {
+      // CDP-only features
+      simplify: cdpEnabled,
+      screenshot: cdpEnabled,
+      clickPassthrough: cdpEnabled && snapshotEnabled,
+      scrollSync: cdpEnabled && snapshotEnabled,
+      filePreview: cdpEnabled,
+      // RPC features (available in both modes via fallback)
+      messaging: rpcEnabled || cdpEnabled,
+      trajectory: rpcEnabled,
+      conversationHistory: rpcEnabled,
+      modelSwitch: true, // works in both modes
+      sessionSwitch: true, // works in both modes
+      // Always available
+      autoActions: true,
+      pushNotifications: true,
+    },
+  };
+
+  res.json(response);
 });
 
 // --- GET /api/status ---

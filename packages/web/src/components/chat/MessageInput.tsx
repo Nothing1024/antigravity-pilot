@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ResponsePhase } from "@ag/shared";
 import { apiUrl } from "../../services/api";
 import { useI18n } from "../../i18n";
 import { useUIStore } from "../../stores/uiStore";
+import { useCascadeStore } from "../../stores/cascadeStore";
 import { ConfirmModal } from "../common/ConfirmModal";
 
 type Props = {
@@ -27,6 +29,13 @@ async function postSend(cascadeId: string, message: string): Promise<void> {
   throw new Error(reason);
 }
 
+async function postStop(cascadeId: string): Promise<void> {
+  await fetch(apiUrl(`/api/stop/${encodeURIComponent(cascadeId)}`), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+}
+
 /**
  * Per-cascade draft store — intentionally a module-level Map so that drafts
  * survive React re-mounts (e.g. view switches) but are cleared on full
@@ -40,10 +49,17 @@ export function MessageInput({ cascadeId }: Props) {
   // Initialise from stored draft for this cascade
   const [text, setTextRaw] = useState(() => (cascadeId ? drafts.get(cascadeId) || "" : ""));
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [focused, setFocused] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendMode = useUIStore((s) => s.sendMode);
+
+  // Get phase for current cascade
+  const currentCascade = useCascadeStore((s) => s.cascades.find((c) => c.id === cascadeId));
+  const phase = currentCascade?.phase;
+  const isRunning = phase === ResponsePhase.GENERATING || phase === ResponsePhase.THINKING || phase === ResponsePhase.TOOL_RUNNING;
+  const isApprovalPending = phase === ResponsePhase.APPROVAL_PENDING;
 
   // Wrapper: update both local state and the draft map
   const setText = useCallback((value: string) => {
@@ -91,8 +107,18 @@ export function MessageInput({ cascadeId }: Props) {
     }
   }, [cascadeId, sending, text, setText]);
 
+  const stop = useCallback(async () => {
+    if (!cascadeId || stopping) return;
+    setStopping(true);
+    try {
+      await postStop(cascadeId);
+    } finally {
+      setTimeout(() => setStopping(false), 1500);
+    }
+  }, [cascadeId, stopping]);
+
   const isMac = typeof window !== "undefined" && window.navigator.platform.includes("Mac");
-  const canSend = !!cascadeId && !sending && !!text.trim();
+  const canSend = !!cascadeId && !sending && !!text.trim() && !isRunning;
   const showTrash = text.length >= 20;
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -115,9 +141,37 @@ export function MessageInput({ cascadeId }: Props) {
     ? "↵"
     : isMac ? "⌘↵" : "Ctrl+↵";
 
+  // Dynamic placeholder based on phase
+  const placeholder = !cascadeId
+    ? t("input.waiting")
+    : isRunning
+    ? "AI 回复中…"
+    : isApprovalPending
+    ? "等待审批…"
+    : t("input.placeholder");
+
   return (
     <div className="border-t border-border/20 bg-gradient-to-t from-background via-background to-transparent px-3 sm:px-5 pt-1 pb-[calc(0.625rem+var(--safe-area-bottom))]">
       <div className="max-w-2xl mx-auto">
+        {/* Phase status bar */}
+        {isRunning && (
+          <div className="flex items-center gap-2 py-1 px-1 text-[11px] text-green-400/80 animate-pulse">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+            </span>
+            <span>{phase === ResponsePhase.THINKING ? "思考中…" : phase === ResponsePhase.TOOL_RUNNING ? "工具执行中…" : "生成中…"}</span>
+          </div>
+        )}
+        {isApprovalPending && (
+          <div className="flex items-center gap-2 py-1 px-1 text-[11px] text-yellow-400/80">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-500" />
+            </span>
+            <span>等待审批操作…</span>
+          </div>
+        )}
         <div
           className={[
             "relative flex items-end gap-1.5 rounded-2xl border bg-muted/20 transition-all duration-300",
@@ -133,7 +187,7 @@ export function MessageInput({ cascadeId }: Props) {
             name="message"
             className="flex-1 min-h-[42px] max-h-[160px] bg-transparent px-4 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground/35 focus:outline-none resize-none disabled:cursor-not-allowed"
             rows={1}
-            placeholder={cascadeId ? t("input.placeholder") : t("input.waiting")}
+            placeholder={placeholder}
             value={text}
             disabled={!cascadeId || sending}
             onChange={(e) => setText(e.target.value)}
@@ -168,31 +222,57 @@ export function MessageInput({ cascadeId }: Props) {
               {hintText}
             </span>
 
-            {/* Send button */}
-            <button
-              type="button"
-              className={[
-                "inline-flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                canSend
-                  ? "bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
-                  : "text-muted-foreground/30 cursor-default"
-              ].join(" ")}
-              onClick={() => void send()}
-              disabled={!canSend}
-              aria-label="Send"
-            >
-              {sending ? (
-                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-              )}
-            </button>
+            {/* Send / Stop button */}
+            {isRunning ? (
+              <button
+                type="button"
+                className={[
+                  "inline-flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "bg-red-500/80 text-white shadow-sm hover:bg-red-500 hover:shadow-md hover:scale-105 active:scale-95",
+                  stopping ? "opacity-60" : "",
+                ].join(" ")}
+                onClick={() => void stop()}
+                disabled={stopping}
+                aria-label="Stop"
+                title="停止生成"
+              >
+                {stopping ? (
+                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={[
+                  "inline-flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  canSend
+                    ? "bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+                    : "text-muted-foreground/30 cursor-default"
+                ].join(" ")}
+                onClick={() => void send()}
+                disabled={!canSend}
+                aria-label="Send"
+              >
+                {sending ? (
+                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

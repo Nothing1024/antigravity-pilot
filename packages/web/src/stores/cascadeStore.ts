@@ -1,11 +1,14 @@
-import type { QuotaInfo } from "@ag/shared";
+import type { QuotaInfo, ResponsePhase } from "@ag/shared";
 import { create } from "zustand";
 
 export type CascadeEntry = {
   id: string;
   title: string;
   window?: string;
+  workspace?: string;
+  workspaceUri?: string;
   active: boolean;
+  phase?: ResponsePhase;
   quota: QuotaInfo | null;
 };
 
@@ -15,6 +18,7 @@ type State = {
   setCascades: (next: CascadeEntry[]) => void;
   selectCascade: (id: string) => void;
   setQuota: (cascadeId: string, quota: QuotaInfo) => void;
+  setPhase: (cascadeId: string, phase: ResponsePhase) => void;
 };
 
 export const useCascadeStore = create<State>((set, get) => ({
@@ -35,6 +39,13 @@ export const useCascadeStore = create<State>((set, get) => ({
       cascades: s.cascades.map((c) =>
         c.id === cascadeId ? { ...c, quota } : c
       )
-    }))
+    })),
+
+  setPhase: (cascadeId, phase) =>
+    set((s) => ({
+      cascades: s.cascades.map((c) =>
+        c.id === cascadeId ? { ...c, phase } : c
+      )
+    })),
 }));
 

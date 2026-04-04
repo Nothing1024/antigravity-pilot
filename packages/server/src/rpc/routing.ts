@@ -172,8 +172,11 @@ export async function resolveAndCall<T>(
    *  will be pinned for subsequent writes. */
   readOnly = false,
 ): Promise<{ data: T; instance: LSInstance }> {
+  const QUIET_METHODS = new Set(["GetCascadeTrajectorySteps", "GetCascadeTrajectory", "GetAllCascadeTrajectories"]);
+  const verbose = !QUIET_METHODS.has(method);
   // If caller pinned a specific instance, use it directly
   if (pinnedInstance) {
+    if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → pinned PID=${pinnedInstance.pid}`);
     const data = await rpc.call<T>(method, body, pinnedInstance);
     return { data, instance: pinnedInstance };
   }
@@ -192,6 +195,7 @@ export async function resolveAndCall<T>(
     );
     if (preferred) {
       try {
+        if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → affinity ws=${wsId} PID=${preferred.pid}`);
         const data = await rpc.call<T>(method, body, preferred);
         return { data, instance: preferred };
       } catch (err) {
@@ -214,6 +218,7 @@ export async function resolveAndCall<T>(
   // for reads. Writes get null when workspace metadata is unavailable.
   const owner = await discoverOwnerInstance(cascadeId, instances, readOnly);
   if (owner) {
+    if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → discovered owner PID=${owner.pid}${owner.workspaceId ? ` ws=${owner.workspaceId}` : ''}`);
     const data = await rpc.call<T>(method, body, owner);
     return { data, instance: owner };
   }
@@ -256,6 +261,7 @@ export async function resolveAndCall<T>(
         if (a.isRunning !== b.isRunning) return a.isRunning ? -1 : 1;
         return b.stepCount - a.stepCount;
       });
+      if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → try-all fallback PID=${results[0].instance.pid}`);
       return { data: results[0].data, instance: results[0].instance };
     }
     if (errors.length > 0) throw errors[0];

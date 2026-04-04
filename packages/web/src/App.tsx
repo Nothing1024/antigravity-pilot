@@ -11,6 +11,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useI18n } from "./i18n";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useCascadeStore } from "./stores/cascadeStore";
+import { useCapabilitiesStore } from "./stores/capabilitiesStore";
 import { apiUrl } from "./services/api";
 
 type View = "chat" | "settings";
@@ -19,6 +20,10 @@ type AuthState = "checking" | "authenticated" | "unauthenticated";
 function AuthenticatedApp() {
   useWebSocket();
   useTheme();
+
+  // Fetch server capabilities once on mount to enable mode-aware rendering
+  const fetchCapabilities = useCapabilitiesStore((s) => s.fetchCapabilities);
+  useEffect(() => { fetchCapabilities(); }, [fetchCapabilities]);
 
   const title = useCascadeStore((s) => {
     const cur = s.currentId ? s.cascades.find((c) => c.id === s.currentId) : null;

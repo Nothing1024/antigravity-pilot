@@ -16,7 +16,7 @@ export async function sendMessageWithFallback(
 ): Promise<InjectMessageResult> {
   if (config.rpc.enabled) {
     try {
-      console.log(`[rpc] Using RPC for message: ${cascadeId}`);
+      console.log(`[rpc] SendMessage via RPC: ${cascadeId.slice(0, 8)}…`);
 
       await rpcForConversation("SendUserCascadeMessage", cascadeId, {
         cascadeId,
@@ -25,16 +25,18 @@ export async function sendMessageWithFallback(
         },
       });
 
+      console.log(`[rpc] ✅ SendMessage success via RPC`);
       return { ok: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!config.rpc.fallbackToCDP || !config.cdp.enabled) {
+        console.log(`[rpc] ❌ SendMessage failed, no fallback available: ${message}`);
         return { ok: false, reason: `RPC send failed: ${message}` };
       }
-      console.warn(`[rpc] Fallback to CDP for message: ${cascadeId} (${message})`);
+      console.warn(`[rpc] ⚠️ SendMessage failed, falling back to CDP: ${message}`);
     }
   } else {
-    console.log(`[rpc] rpc.enabled=false; using CDP: ${cascadeId}`);
+    console.log(`[cdp] RPC disabled, using CDP for SendMessage: ${cascadeId.slice(0, 8)}…`);
   }
 
   if (!config.cdp.enabled) {

@@ -54,6 +54,10 @@ async function extractQuotaInfo(cdp: CDPConnection): Promise<QuotaInfo | null> {
 
 let warnedSnapshotDisabled = false;
 
+/**
+ * Capture HTML snapshots from CDP.
+ * Only runs when `config.cdp.enableSnapshot` is true.
+ */
 export async function updateSnapshots(): Promise<void> {
   if (!config.cdp.enabled) return;
   if (!config.cdp.enableSnapshot) {
@@ -64,7 +68,7 @@ export async function updateSnapshots(): Promise<void> {
     return;
   }
   warnedSnapshotDisabled = false;
-  // Parallel updates
+  // Parallel HTML snapshot updates
   await Promise.all(
     cascadeStore.getAll().map(async (c) => {
       try {
@@ -111,9 +115,25 @@ export async function updateSnapshots(): Promise<void> {
         }
       }
 
-      // Keep store in sync: stableCount / lastFeedbackFingerprint are mutated in-place.
       cascadeStore.set(c.id, c);
+    })
+  );
+}
 
+/**
+ * CDP tasks that should run regardless of snapshot setting:
+ * - Auto-actions (accept all / retry on error)
+ * - Quota polling
+ * - CSS/computed vars refresh
+ *
+ * These are lightweight CDP calls that provide critical theming,
+ * quota data, and auto-action support.
+ */
+export async function updateCdpTasks(): Promise<void> {
+  if (!config.cdp.enabled) return;
+
+  await Promise.all(
+    cascadeStore.getAll().map(async (c) => {
       // ── Auto-actions (Accept All / Retry on error) ──
       if (c.snapshot) {
         try {
@@ -160,7 +180,7 @@ export async function updateSnapshots(): Promise<void> {
         }
       }
 
-      // Ensure updated object stays in store (conservative; Map stores by ref anyway).
+      // Ensure updated object stays in store
       cascadeStore.set(c.id, c);
     })
   );

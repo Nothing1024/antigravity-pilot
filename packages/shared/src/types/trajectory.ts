@@ -25,4 +25,6 @@ export interface TrajectoryStep {
   timestamp?: number;
   clientMessageId?: string;
   _corrupted?: boolean;
+  /** True when a PLANNER_RESPONSE has only tool calls, no prose text */
+  toolOnly?: boolean;
 }

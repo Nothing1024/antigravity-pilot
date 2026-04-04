@@ -37,6 +37,9 @@ export interface LSInstance {
 const DAEMON_DIR = join(homedir(), ".gemini", "antigravity", "daemon");
 const SERVICE_PREFIX = "exa.language_server_pb.LanguageServerService";
 
+/** Tracks last discovery result signature to suppress unchanged logs. */
+let lastDiscoverySig = "";
+
 async function discoverFromDaemon(): Promise<LSInstance[]> {
   const instances: LSInstance[] = [];
 
@@ -337,7 +340,19 @@ export async function discoverInstances(): Promise<LSInstance[]> {
   }
 
   const instances = Array.from(instanceMap.values());
-  return enrichReachableInstances(instances);
+  const enriched = await enrichReachableInstances(instances);
+
+  // Only log when the discovery result changes
+  const sig = enriched.map(i => `${i.pid}:${i.httpsPort}`).join(',');
+  if (sig !== lastDiscoverySig) {
+    lastDiscoverySig = sig;
+    if (enriched.length > 0) {
+      console.log(`[rpc:discovery] found ${enriched.length} LS instance(s) — ${enriched.map(i => `PID=${i.pid} port=${i.httpsPort}${i.workspaceId ? ` ws=${i.workspaceId}` : ''}`).join(', ')}`);
+    } else {
+      console.log(`[rpc:discovery] no reachable LS instances found`);
+    }
+  }
+  return enriched;
 }
 
 /**
@@ -410,5 +425,6 @@ export class LSDiscovery {
     this.discoveryGeneration++;
     this.lastDiscovery = 0;
     this.pendingDiscovery = null;
+    console.log(`[rpc:discovery] cache invalidated, will re-discover on next call`);
   }
 }

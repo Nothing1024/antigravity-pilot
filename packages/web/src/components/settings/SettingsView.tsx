@@ -4,6 +4,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useI18n, ALL_LOCALES, LOCALE_LABELS } from "../../i18n";
 import { apiUrl } from "../../services/api";
 import { useUIStore } from "../../stores/uiStore";
+import { useCapabilitiesStore } from "../../stores/capabilitiesStore";
 
 type SimplifyMode = "off" | "light" | "full";
 
@@ -21,6 +22,7 @@ export function SettingsView({ visible }: Props) {
   const autoActions = useUIStore((s) => s.autoActions);
   const setAutoAction = useUIStore((s) => s.setAutoAction);
   const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
+  const capabilities = useCapabilitiesStore((s) => s.capabilities);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -349,48 +351,50 @@ export function SettingsView({ visible }: Props) {
           </div>
         </div>
 
-        {/* IDE GPU Simplification */}
-        <div className="rounded-lg border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-medium">{t("settings.simplify")}</h2>
-            <p className="text-xs text-muted-foreground">{t("settings.simplify.desc")}</p>
+        {/* IDE GPU Simplification — only shown when CDP is enabled */}
+        {capabilities.features.simplify && (
+          <div className="rounded-lg border border-border bg-card shadow-sm">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-medium">{t("settings.simplify")}</h2>
+              <p className="text-xs text-muted-foreground">{t("settings.simplify.desc")}</p>
+            </div>
+            <div className="flex gap-2 p-4">
+              {([
+                { value: "off" as SimplifyMode, labelKey: "settings.simplify.off" as const, descKey: "settings.simplify.off.desc" as const },
+                { value: "light" as SimplifyMode, labelKey: "settings.simplify.light" as const, descKey: "settings.simplify.light.desc" as const },
+                { value: "full" as SimplifyMode, labelKey: "settings.simplify.full" as const, descKey: "settings.simplify.full.desc" as const },
+              ]).map((opt) => {
+                const active = simplifyMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={simplifyLoading}
+                    className={[
+                      "flex-1 inline-flex flex-col items-center gap-1 rounded-md border p-3 text-xs font-medium transition-colors disabled:opacity-50",
+                      active
+                        ? "border-ring bg-accent text-accent-foreground"
+                        : "border-transparent hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                    ].join(" ")}
+                    onClick={() => void applySimplify(opt.value)}
+                  >
+                    {opt.value === "off" && (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    )}
+                    {opt.value === "light" && (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    )}
+                    {opt.value === "full" && (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    )}
+                    <span>{simplifyLoading && active ? t("settings.simplify.applying") : t(opt.labelKey)}</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">{t(opt.descKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex gap-2 p-4">
-            {([
-              { value: "off" as SimplifyMode, labelKey: "settings.simplify.off" as const, descKey: "settings.simplify.off.desc" as const },
-              { value: "light" as SimplifyMode, labelKey: "settings.simplify.light" as const, descKey: "settings.simplify.light.desc" as const },
-              { value: "full" as SimplifyMode, labelKey: "settings.simplify.full" as const, descKey: "settings.simplify.full.desc" as const },
-            ]).map((opt) => {
-              const active = simplifyMode === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={simplifyLoading}
-                  className={[
-                    "flex-1 inline-flex flex-col items-center gap-1 rounded-md border p-3 text-xs font-medium transition-colors disabled:opacity-50",
-                    active
-                      ? "border-ring bg-accent text-accent-foreground"
-                      : "border-transparent hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-                  ].join(" ")}
-                  onClick={() => void applySimplify(opt.value)}
-                >
-                  {opt.value === "off" && (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                  )}
-                  {opt.value === "light" && (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-                  )}
-                  {opt.value === "full" && (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                  )}
-                  <span>{simplifyLoading && active ? t("settings.simplify.applying") : t(opt.labelKey)}</span>
-                  <span className="text-[10px] font-normal text-muted-foreground">{t(opt.descKey)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         {/* System Info */}
         <div className="rounded-lg border border-border bg-card shadow-sm">
@@ -405,6 +409,24 @@ export function SettingsView({ visible }: Props) {
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-muted-foreground">{t("settings.stack")}</span>
               <span className="text-xs font-medium">Node + React</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-muted-foreground">Mode</span>
+              <span className={[
+                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                capabilities.mode === "hybrid"
+                  ? "bg-green-500/10 text-green-500 ring-1 ring-inset ring-green-500/20"
+                  : capabilities.mode === "rpc-only"
+                    ? "bg-blue-500/10 text-blue-500 ring-1 ring-inset ring-blue-500/20"
+                    : capabilities.mode === "cdp-only"
+                      ? "bg-amber-500/10 text-amber-500 ring-1 ring-inset ring-amber-500/20"
+                      : "bg-red-500/10 text-red-500 ring-1 ring-inset ring-red-500/20"
+              ].join(" ")}>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+                </span>
+                {capabilities.mode}
+              </span>
             </div>
           </div>
         </div>

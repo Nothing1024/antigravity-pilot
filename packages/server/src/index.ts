@@ -12,7 +12,7 @@ import { authMiddleware, authRouter } from "./api/auth";
 import { parseCookies, verifyToken } from "./auth/token";
 import { config } from "./config";
 import { discover } from "./cdp/discovery";
-import { updateSnapshots } from "./loop/snapshot";
+import { updateSnapshots, updateCdpTasks } from "./loop/snapshot";
 import { globalRateLimit, completionsRateLimit } from "./middleware/ratelimit";
 import { updatePhases } from "./monitor/phase";
 import { runHealthChecks } from "./pool/health";
@@ -159,13 +159,38 @@ async function main(): Promise<void> {
   });
 
   server.listen(config.port, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${config.port}`);
+    // ── Startup Banner ──
+    const rpcEnabled = config.rpc.enabled;
+    const fallback = config.rpc.fallbackToCDP;
+    const mode = rpcEnabled ? "RPC Mode" : "CDP Mode (Legacy)";
+
+    console.log(``);
+    console.log(`╔══════════════════════════════════════════════════╗`);
+    console.log(`║          🚀 Antigravity Pilot v3.0               ║`);
+    console.log(`╠══════════════════════════════════════════════════╣`);
+    console.log(`║  Mode:      ${mode.padEnd(37)}║`);
+    console.log(`║  Port:      ${String(config.port).padEnd(37)}║`);
+    console.log(`╠══════════════════════════════════════════════════╣`);
+    if (rpcEnabled) {
+      console.log(`║  RPC:       ✅ enabled (消息/状态/Steps)         ║`);
+      console.log(`║    fallback → CDP:  ${(fallback ? 'yes' : 'no').padEnd(28)}║`);
+      console.log(`║    discovery:       ${(config.rpc.discoveryInterval / 1000 + 's').padEnd(28)}║`);
+      console.log(`║    active poll:     ${(config.rpc.activePollInterval + 'ms').padEnd(28)}║`);
+      console.log(`║    idle poll:       ${(config.rpc.idlePollInterval / 1000 + 's').padEnd(28)}║`);
+    } else {
+      console.log(`║  RPC:       ❌ disabled                         ║`);
+    }
+    console.log(`║  CDP:       ✅ always on (UI 镜像/点击转发)       ║`);
+    console.log(`║    ports:           ${config.cdp.ports.join(', ').padEnd(28)}║`);
+    console.log(`╠══════════════════════════════════════════════════╣`);
     if (config.api.openaiCompat) {
-      console.log(`🤖 OpenAI-compatible API: http://0.0.0.0:${config.port}/v1/chat/completions`);
+      console.log(`║  OpenAI API: http://0.0.0.0:${config.port}/v1/chat/completions`);
     }
     if (config.apiKeys.length > 0) {
-      console.log(`🔑 API Keys configured: ${config.apiKeys.length} key(s)`);
+      console.log(`║  API Keys:  ${(config.apiKeys.length + ' key(s) configured').padEnd(37)}║`);
     }
+    console.log(`╚══════════════════════════════════════════════════╝`);
+    console.log(``);
   });
 
   // F6: Initialize webhook listeners
@@ -176,14 +201,15 @@ async function main(): Promise<void> {
   const discoveryIntervalMs = Math.max(1000, config.rpc.discoveryInterval);
   setInterval(discover, discoveryIntervalMs);
 
-  // Self-scheduling snapshot loop: prevents overlapping when CDP calls are slow
-  async function snapshotLoop(): Promise<void> {
-    await updateSnapshots();
-    // F2: Phase detection piggybacks on snapshot loop
+  // Self-scheduling poll loop: prevents overlapping when CDP calls are slow
+  async function pollLoop(): Promise<void> {
+    await updateSnapshots();      // HTML capture (only when enableSnapshot=true)
+    await updateCdpTasks();       // CSS refresh, quota, auto-actions (always)
+    // F2: Phase detection piggybacks on poll loop
     await updatePhases();
-    setTimeout(() => void snapshotLoop(), POLL_INTERVAL);
+    setTimeout(() => void pollLoop(), POLL_INTERVAL);
   }
-  void snapshotLoop();
+  void pollLoop();
 
   // F1: Connection Pool health checks
   const healthCheckInterval = config.connectionPool.healthCheckInterval;

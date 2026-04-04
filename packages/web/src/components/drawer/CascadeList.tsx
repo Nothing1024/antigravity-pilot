@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { ResponsePhase } from "@ag/shared";
 import { useI18n } from "../../i18n";
 import { switchConversation } from "../../services/cascadeService";
 import { useCascadeStore } from "../../stores/cascadeStore";
@@ -7,6 +8,40 @@ import { useCascadeStore } from "../../stores/cascadeStore";
 type Props = {
   onSelect?: () => void;
 };
+
+function PhaseIndicator({ phase }: { phase?: ResponsePhase }) {
+  if (!phase || phase === ResponsePhase.IDLE || phase === ResponsePhase.COMPLETED) {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0" title="Idle">
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-muted-foreground/30" />
+      </span>
+    );
+  }
+  if (phase === ResponsePhase.GENERATING || phase === ResponsePhase.THINKING || phase === ResponsePhase.TOOL_RUNNING) {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0" title="Running">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+    );
+  }
+  if (phase === ResponsePhase.APPROVAL_PENDING) {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0" title="Awaiting Approval">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-yellow-500" />
+      </span>
+    );
+  }
+  if (phase === ResponsePhase.ERROR || phase === ResponsePhase.QUOTA_ERROR) {
+    return (
+      <span className="relative flex h-2 w-2 shrink-0" title="Error">
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+      </span>
+    );
+  }
+  return null;
+}
 
 export function CascadeList({ onSelect }: Props) {
   const t = useI18n();
@@ -35,6 +70,7 @@ export function CascadeList({ onSelect }: Props) {
     <div className="flex flex-col gap-1">
       {cascades.map((c) => {
         const active = c.id === currentId;
+        const isRunning = c.phase === ResponsePhase.GENERATING || c.phase === ResponsePhase.THINKING || c.phase === ResponsePhase.TOOL_RUNNING;
         return (
           <button
             key={c.id}
@@ -43,16 +79,20 @@ export function CascadeList({ onSelect }: Props) {
               "group relative flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition-colors duration-200",
               active
                 ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              isRunning ? "ring-1 ring-green-500/20" : "",
             ].join(" ")}
             onClick={() => onPick(c.id)}
           >
-            <div className={["truncate text-[13px] leading-tight pr-6", active ? "font-semibold" : "font-medium"].join(" ")}>
-              {c.title || t("cascadeList.untitled")}
+            <div className="flex items-center gap-2">
+              <PhaseIndicator phase={c.phase} />
+              <div className={["truncate text-[13px] leading-tight flex-1 pr-6", active ? "font-semibold" : "font-medium"].join(" ")}>
+                {c.title || t("cascadeList.untitled")}
+              </div>
             </div>
-            {c.window && (
-              <div className={["truncate text-[11px] pr-6", active ? "text-primary/70" : "text-muted-foreground/50"].join(" ")}>
-                {c.window}
+            {c.workspace && (
+              <div className={["truncate text-[11px] pl-4 pr-6", active ? "text-primary/70" : "text-muted-foreground/50"].join(" ")}>
+                {c.workspace}
               </div>
             )}
 

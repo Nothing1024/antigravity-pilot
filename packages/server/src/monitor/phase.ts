@@ -14,8 +14,14 @@ import { ResponsePhase } from "@ag/shared";
 
 import { eventBus } from "../events/bus";
 import { config } from "../config";
-import { rpcForConversation } from "../rpc/routing";
+import { discovery, rpc } from "../rpc/routing";
 import { cascadeStore } from "../store/cascades";
+import { cascadeMap } from "../store/cascadeMap";
+
+/** Track last-seen RPC status per cascade to suppress noisy repeated logs. */
+const lastRpcStatus = new Map<string, string>();
+/** Track which cascades are currently in CDP fallback to suppress repeated logs. */
+const inCdpFallback = new Set<string>();
 
 // --- Phase Detection Script (injected into Antigravity DOM) ---
 
@@ -320,22 +326,55 @@ async function extractResponseText(
   }
 }
 
-type RpcCascadeTrajectory = {
-  status?: string;
-};
+/**
+ * Fetch trajectory statuses per LS instance.
+ * Returns a Map of workspaceId → best status for that instance.
+ *
+ * Previous approach (fetchBestRpcStatus) was WRONG: it picked the single
+ * most active status across ALL instances and applied it to ALL cascades,
+ * causing e.g. fusion to show as "generating" when only vibee was running.
+ */
+async function fetchPerInstanceStatus(): Promise<Map<string, string>> {
+  const instances = await discovery.getInstances();
+  const result = new Map<string, string>();
 
-async function getRpcStatus(cascadeId: string): Promise<string> {
-  const trajectory = await rpcForConversation<RpcCascadeTrajectory>(
-    "GetCascadeTrajectory",
-    cascadeId,
-    { cascadeId },
-    undefined,
-    true,
+  await Promise.allSettled(
+    instances.map(async (inst) => {
+      try {
+        const data = await rpc.call<{
+          trajectorySummaries?: Record<string, { status?: string }>;
+        }>("GetAllCascadeTrajectories", {}, inst);
+
+        const summaries = data.trajectorySummaries;
+        if (!summaries) return;
+
+        let best = "CASCADE_RUN_STATUS_IDLE";
+        for (const [, summary] of Object.entries(summaries)) {
+          const status = summary.status ?? "CASCADE_RUN_STATUS_IDLE";
+          if (statusPriority(status) > statusPriority(best)) {
+            best = status;
+          }
+        }
+
+        const wsId = inst.workspaceId ?? `pid-${inst.pid}`;
+        result.set(wsId, best);
+      } catch {
+        // LS unreachable — skip
+      }
+    }),
   );
 
-  const status = trajectory.status;
-  if (!status) throw new Error("RPC GetCascadeTrajectory missing status");
-  return status;
+  return result;
+}
+
+/** Higher = more active. */
+function statusPriority(status: string): number {
+  switch (status) {
+    case "CASCADE_RUN_STATUS_RUNNING": return 3;
+    case "CASCADE_RUN_STATUS_ERROR": return 2;
+    case "CASCADE_RUN_STATUS_IDLE": return 1;
+    default: return 0;
+  }
 }
 
 function mapRpcStatusToPhase(status: string): ResponsePhase {
@@ -384,23 +423,124 @@ function applyPhaseChange(
 }
 
 /**
+ * Match a cascade's window title to an LS instance workspaceId.
+ *
+ * Window title format: "project-name — Antigravity" or "project-name - Tab Title"
+ * WorkspaceId format: "file_Users_nothing_workspace_project-name"
+ *
+ * We extract the project name from both and compare.
+ */
+function matchCascadeToWorkspace(
+  cascade: { metadata: { windowTitle: string } },
+  statusMap: Map<string, string>,
+): string | null {
+  const wt = cascade.metadata.windowTitle ?? "";
+  // Extract workspace name from window title (before " — " or " - ")
+  const wsName = (wt.split(" — ")[0] || wt.split(" - ")[0] || "").trim().toLowerCase();
+  if (!wsName) return null;
+
+  for (const [wsId, status] of statusMap) {
+    // wsId like "file_Users_nothing_workspace_vibee" — extract last segment
+    const segments = wsId.split("_");
+    const lastSegment = segments[segments.length - 1]?.toLowerCase() ?? "";
+
+    // Also try matching against the path-based segments
+    // e.g. "file_Users_nothing_workspace_antigravity_antigravity-pilot"
+    // should match window title "antigravity-pilot"
+    const fullPath = wsId.replace(/^file_/, "").toLowerCase();
+
+    if (
+      lastSegment === wsName ||
+      wsName.includes(lastSegment) ||
+      lastSegment.includes(wsName) ||
+      fullPath.endsWith(wsName.replace(/-/g, "_")) ||
+      fullPath.endsWith(wsName)
+    ) {
+      return status;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Run phase detection for all connected cascades.
  * Called from the snapshot loop (~1s interval).
+ *
+ * RPC mode: fetch per-instance trajectory statuses and map each
+ * cascade to its own LS instance for accurate per-cascade phase.
+ * Falls back to CDP DOM heuristics for fine-grained states.
  */
 export async function updatePhases(): Promise<void> {
   const cascades = cascadeStore.getAll();
+
+  if (!config.rpc.enabled) {
+    // CDP-only mode: use DOM heuristics for all cascades
+    await Promise.all(cascades.map((c) => detectPhase(c.id)));
+    return;
+  }
+
+  // Fetch per-instance statuses
+  let statusMap: Map<string, string>;
+  try {
+    statusMap = await fetchPerInstanceStatus();
+  } catch {
+    // RPC completely unavailable — fall back to CDP for all cascades
+    for (const c of cascades) {
+      if (!inCdpFallback.has(c.id)) {
+        inCdpFallback.add(c.id);
+        console.log(`[phase:cdp] ${c.id.slice(0, 8)}… RPC unavailable, using CDP fallback`);
+      }
+    }
+    await Promise.all(cascades.map((c) => detectPhase(c.id)));
+    return;
+  }
+
+  if (statusMap.size === 0) {
+    // No LS instances found — fall back to CDP
+    await Promise.all(cascades.map((c) => detectPhase(c.id)));
+    return;
+  }
+
   await Promise.all(
     cascades.map(async (c) => {
-      try {
-        if (!config.rpc.enabled) {
-          await detectPhase(c.id);
-          return;
+      // Prefer cascadeMap: use pre-resolved workspace for accurate lookup
+      const mapping = cascadeMap.getByCascade(c.id);
+      let matchedStatus: string | null = null;
+
+      if (mapping) {
+        // Find the status for this cascade's workspace
+        for (const [wsId, status] of statusMap) {
+          const normalWsId = wsId.toLowerCase();
+          const normalMappingWsId = mapping.workspaceId.toLowerCase();
+          if (
+            normalWsId === normalMappingWsId ||
+            normalWsId.includes(normalMappingWsId) ||
+            normalMappingWsId.includes(normalWsId)
+          ) {
+            matchedStatus = status;
+            break;
+          }
+        }
+      }
+
+      // Fallback: title-based matching (for cascades not yet in cascadeMap)
+      if (!matchedStatus) {
+        matchedStatus = matchCascadeToWorkspace(c, statusMap);
+      }
+
+      if (matchedStatus) {
+        // Log status changes
+        const prev = lastRpcStatus.get(c.id);
+        if (matchedStatus !== prev) {
+          console.log(`[phase:rpc] ${c.metadata.chatTitle}: ${prev ?? 'init'} → ${matchedStatus}`);
+          lastRpcStatus.set(c.id, matchedStatus);
+        }
+        if (inCdpFallback.delete(c.id)) {
+          console.log(`[phase:rpc] ${c.id.slice(0, 8)}… RPC recovered`);
         }
 
-        const status = await getRpcStatus(c.id);
-        console.log(`Status from RPC: ${status}`);
-
-        const rpcPhase = mapRpcStatusToPhase(status);
+        const rpcPhase = mapRpcStatusToPhase(matchedStatus);
 
         if (
           rpcPhase === ResponsePhase.GENERATING ||
@@ -414,13 +554,17 @@ export async function updatePhases(): Promise<void> {
           return;
         }
 
-        // Fine-grained states (THINKING/APPROVAL_PENDING/COMPLETED/...) still
-        // need CDP. Use DOM heuristics only when RPC is not definitively RUNNING/ERROR.
+        // RPC says IDLE — use CDP for fine-grained states (THINKING, APPROVAL_PENDING, etc.)
         await detectPhase(c.id);
-      } catch {
-        console.log(`Status from CDP: ${c.id}`);
+      } else {
+        // No matching LS instance — fall back to CDP
+        if (!inCdpFallback.has(c.id)) {
+          inCdpFallback.add(c.id);
+          console.log(`[phase:cdp] ${c.metadata.chatTitle}: no matching LS instance, using CDP`);
+        }
         await detectPhase(c.id);
       }
     }),
   );
 }
+

@@ -1,5 +1,5 @@
 import type { ConversationWSMessage, TrajectoryStep } from "@ag/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Result = {
   steps: TrajectoryStep[];
@@ -7,6 +7,8 @@ type Result = {
   running: boolean;
   connected: boolean;
   error: string | null;
+  /** Switch to a different conversation UUID over the existing WS */
+  switchTo: (conversationId: string) => void;
 };
 
 function stepsWsUrl(cascadeId: string): string {
@@ -88,6 +90,12 @@ export function useStepsStream(cascadeId: string | null): Result {
             Math.max(prev ?? 0, msg.offset + msg.steps.length),
           );
 
+          // enriched=true means full content from GetCascadeTrajectory — replace entirely
+          if ((msg as any).enriched && msg.offset === 0) {
+            setSteps(msg.steps);
+            return;
+          }
+
           setSteps((prev) => {
             const endOffset = msg.offset + msg.steps.length;
 
@@ -96,7 +104,15 @@ export function useStepsStream(cascadeId: string | null): Result {
               const next = prev.slice();
               if (endOffset > next.length) next.length = endOffset;
               for (let i = 0; i < msg.steps.length; i += 1) {
-                next[msg.offset + i] = msg.steps[i];
+                // Only overwrite if the new step has more content
+                const existing = next[msg.offset + i];
+                const incoming = msg.steps[i];
+                if (!existing?.content?.text && incoming?.content?.text) {
+                  next[msg.offset + i] = incoming;
+                } else if (!existing) {
+                  next[msg.offset + i] = incoming;
+                }
+                // Otherwise keep the enriched version
               }
               return next;
             }
@@ -139,5 +155,16 @@ export function useStepsStream(cascadeId: string | null): Result {
     };
   }, [cascadeId]);
 
-  return { steps, stepCount, running, connected, error };
+  const switchTo = useCallback((conversationId: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Reset local state
+    setSteps([]);
+    setStepCount(null);
+    setRunning(false);
+    // Tell server to switch
+    ws.send(JSON.stringify({ type: "switchTo", conversationId }));
+  }, []);
+
+  return { steps, stepCount, running, connected, error, switchTo };
 }

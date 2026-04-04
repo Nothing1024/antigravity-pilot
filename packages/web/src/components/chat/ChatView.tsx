@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCascadeStore } from "../../stores/cascadeStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -11,6 +11,7 @@ import { ToolbarButtonsBar } from "./ToolbarButtonsBar";
 import type { ToolbarButton } from "./ToolbarButtonsBar";
 import { PopupBubble } from "./PopupBubble";
 import type { PopupItem } from "./PopupBubble";
+import { useCapabilitiesStore } from "../../stores/capabilitiesStore";
 
 type ToolbarPopup = {
   open: boolean;
@@ -26,14 +27,34 @@ export function ChatView() {
     ? ((import.meta.env.VITE_DEBUG_CASCADE_ID as string | undefined) ?? null)
     : null;
   const activeId = currentId || debugCascadeId;
+  const serverMode = useCapabilitiesStore((s) => s.capabilities.mode);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [launching, setLaunching] = useState(false);
   const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
   const [toolbarButtons, setToolbarButtons] = useState<ToolbarButton[]>([]);
   const [actionButtons, setActionButtons] = useState<ToolbarButton[]>([]);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [toolbarPopup, setToolbarPopup] = useState<ToolbarPopup>({
     open: false, items: [], triggerIndex: null, anchor: null,
   });
+
+  // Track scroll position to show/hide "scroll to bottom" button
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(distanceFromBottom > 300);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeId]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
 
   const scrollToBottomIfNeeded = useCallback(() => {
     const el = scrollRef.current;
@@ -154,7 +175,11 @@ export function ChatView() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500" />
           </span>
-          Scanning CDP channels…
+          {serverMode === "rpc-only"
+            ? "Scanning RPC instances…"
+            : serverMode === "cdp-only"
+              ? "Scanning CDP channels…"
+              : "Scanning CDP + RPC…"}
         </div>
       </div>
     );
@@ -173,6 +198,22 @@ export function ChatView() {
           />
         </div>
       </div>
+
+      {/* Scroll to bottom button */}
+      {showScrollBtn && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute right-6 bottom-28 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/90 text-muted-foreground shadow-lg backdrop-blur-sm transition-all hover:bg-accent hover:text-foreground hover:scale-110 active:scale-95"
+          title="滚动到底部"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m7 13 5 5 5-5" />
+            <path d="m7 6 5 5 5-5" />
+          </svg>
+        </button>
+      )}
+
       <FileChangesBar cascadeId={activeId} files={fileChanges} actions={actionButtons} />
       <ToolbarButtonsBar cascadeId={activeId} buttons={toolbarButtons} onPopup={handleToolbarPopup} />
       <MessageInput cascadeId={activeId} />

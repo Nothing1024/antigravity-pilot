@@ -43,6 +43,8 @@ export interface CascadeListItem {
   id: CascadeId;
   title: string;
   window?: string;
+  workspace?: string;
+  workspaceUri?: string;
   active: boolean;
   phase?: ResponsePhase;
   connectionState?: ConnectionState;

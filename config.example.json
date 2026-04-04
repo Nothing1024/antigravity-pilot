@@ -2,12 +2,6 @@
     "password": "monitor",
     "port": 3563,
     "antigravityPath": "",
-    "cdpPorts": [
-        9000,
-        9001,
-        9002,
-        9003
-    ],
     "managerUrl": "http://127.0.0.1:8045",
     "managerPassword": "",
     "authSecret": "",
@@ -17,6 +11,23 @@
         "autoAcceptAll": false,
         "autoRetry": false,
         "retryBackoff": true
+    },
+
+    "// --- Mode Switch (二选一) ---": "",
+    "// rpc.enabled = true  → RPC 模式 (推荐，消息延迟 ~5ms，带宽降低 97%)": "",
+    "// rpc.enabled = false → CDP 模式 (传统，完全依赖 DOM 抓取)": "",
+    "// CDP 始终保持开启，用于 UI 镜像和点击转发，无需手动关闭": "",
+
+    "rpc": {
+        "enabled": true,
+        "fallbackToCDP": true,
+        "discoveryInterval": 10000,
+        "activePollInterval": 50,
+        "idlePollInterval": 5000
+    },
+
+    "cdp": {
+        "ports": [9000, 9001, 9002, 9003]
     },
 
     "// --- API Service (v4.0) ---": "",

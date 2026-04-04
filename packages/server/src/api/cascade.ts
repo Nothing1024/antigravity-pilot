@@ -10,19 +10,158 @@ import { getSimplifyMode, setSimplifyMode } from "../cdp/simplifyState";
 import { config } from "../config";
 import { addSubscription, removeSubscription } from "../push/sender";
 import { cascadeStore } from "../store/cascades";
+import { cascadeMap } from "../store/cascadeMap";
+import { discovery, rpc, conversationAffinity } from "../rpc/routing";
 
 export const cascadeRouter: express.Router = express.Router();
 export const router: express.Router = cascadeRouter;
 export default router;
 
+/**
+ * Normalize workspace identifiers to a comparable path format.
+ * Handles both underscored keys (file_Users_nothing_workspace_vibee)
+ * and file URIs (file:///Users/nothing/workspace/vibee).
+ */
+function normalizeWsPath(ws: string): string {
+  return ws
+    .replace(/^file:\/\/\//, "/")     // file:///Users/... → /Users/...
+    .replace(/^file_/, "/")           // file_Users_... → /Users_...
+    .replace(/_/g, "/")               // /Users_nothing → /Users/nothing
+    .replace(/\/+/g, "/")             // collapse double slashes
+    .replace(/\/$/, "")               // trailing slash
+    .toLowerCase();
+}
+
+function wsKeysMatch(a: string, b: string): boolean {
+  const na = normalizeWsPath(a);
+  const nb = normalizeWsPath(b);
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+// ── Conversation history API ──
+
+type ConversationSummary = {
+  id: string;
+  status: string;
+  numTotalSteps: number;
+  workspace?: string;
+};
+
+/**
+ * GET /api/conversations/history?workspace=<workspaceId>
+ * Lists conversation UUIDs. When `workspace` is provided, only returns
+ * conversations from the LS instance that owns that workspace.
+ * Without a filter, returns ALL conversations grouped by workspace.
+ */
+cascadeRouter.get("/api/conversations/history", async (req, res) => {
+  try {
+    const filterWorkspace = (req.query.workspace as string | undefined) ?? "";
+    const instances = await discovery.getInstances();
+    const seen = new Map<string, ConversationSummary>();
+
+    await Promise.allSettled(
+      instances.map(async (inst) => {
+        try {
+          const data = await rpc.call<{
+            trajectorySummaries?: Record<string, {
+              status?: string;
+              numTotalSteps?: number;
+              stepCount?: number;
+              workspaces?: { workspaceFolderAbsoluteUri?: string }[];
+            }>;
+          }>("GetAllCascadeTrajectories", {}, inst);
+
+          const summaries = data.trajectorySummaries;
+          if (!summaries) return;
+
+          for (const [id, summary] of Object.entries(summaries)) {
+            const convWs = summary.workspaces?.[0]?.workspaceFolderAbsoluteUri ?? "";
+
+            // Filter by workspace at the conversation level
+            if (filterWorkspace && convWs) {
+              if (!wsKeysMatch(convWs, filterWorkspace)) {
+                continue;
+              }
+            }
+            // If filter is set but conversation has no workspace metadata, skip it
+            if (filterWorkspace && !convWs) {
+              continue;
+            }
+
+            const steps = summary.numTotalSteps ?? summary.stepCount ?? 0;
+            const existing = seen.get(id);
+            if (!existing || steps > existing.numTotalSteps) {
+              seen.set(id, {
+                id,
+                status: (summary.status ?? "").replace(/^CASCADE_RUN_STATUS_/, ""),
+                numTotalSteps: steps,
+                workspace: convWs || inst.workspaceId,
+              });
+            }
+          }
+        } catch {
+          // Skip unreachable instances
+        }
+      }),
+    );
+
+    // Sort: RUNNING first, then by step count descending
+    const conversations = [...seen.values()].sort((a, b) => {
+      if (a.status === "RUNNING" && b.status !== "RUNNING") return -1;
+      if (b.status === "RUNNING" && a.status !== "RUNNING") return 1;
+      return b.numTotalSteps - a.numTotalSteps;
+    });
+
+    res.json({ conversations });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // API Routes
-cascadeRouter.get("/cascades", (req, res) => {
+cascadeRouter.get("/cascades", async (_req, res) => {
+  const cascades = cascadeStore.getAll();
+
+  // Collect all known workspace mappings from conversationAffinity
+  // to find which workspace each cascade's conversation belongs to.
+  // Also get LS instances for workspace ID matching.
+  let instances: Awaited<ReturnType<typeof discovery.getInstances>> = [];
+  try {
+    instances = await discovery.getInstances();
+  } catch { /* ignore */ }
+
+  // Build a map: workspaceId → LS instance's full workspaceId path
+  const lsWorkspaces = instances.map((inst) => inst.workspaceId).filter(Boolean);
+
   res.json(
-    cascadeStore.getAll().map((c) => ({
-      id: c.id,
-      title: c.metadata.chatTitle,
-      active: c.metadata.isActive
-    }))
+    cascades.map((c) => {
+      // Prefer cascadeMap for workspace resolution
+      const mapping = cascadeMap.getByCascade(c.id);
+
+      // Derive a user-friendly workspace name from windowTitle
+      const wt = c.metadata.windowTitle ?? "";
+      const friendlyName = wt.split(" — ")[0]?.trim() || wt.split(" - ")[0]?.trim() || "";
+
+      let wsUri = "";
+      if (mapping) {
+        wsUri = mapping.workspaceUri || mapping.workspaceId;
+      } else {
+        // Fallback: conversationAffinity + title matching
+        const affinityWsId = conversationAffinity.get(c.id);
+        const matchedLsWs = lsWorkspaces.find((lsWsId) =>
+          lsWsId && friendlyName && lsWsId.toLowerCase().includes(friendlyName.toLowerCase())
+        );
+        wsUri = affinityWsId || matchedLsWs || "";
+      }
+
+      return {
+        id: c.id,
+        title: c.metadata.chatTitle,
+        active: c.metadata.isActive,
+        workspace: friendlyName,
+        workspaceUri: wsUri,
+      };
+    })
   );
 });
 

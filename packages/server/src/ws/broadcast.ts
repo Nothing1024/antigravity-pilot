@@ -42,15 +42,20 @@ export function broadcast(msg: WSMessage): void {
 export function broadcastCascadeList(): void {
   const list: Array<CascadeListItem & { quota: QuotaInfo | null }> = cascadeStore
     .getAll()
-    .map((c) => ({
-      id: c.id,
-      title: c.metadata.chatTitle,
-      window: c.metadata.windowTitle,
-      active: c.metadata.isActive,
-      phase: c.phase,
-      connectionState: c.connectionState,
-      quota: c.quota || null,
-    }));
+    .map((c) => {
+      const wt = c.metadata.windowTitle ?? "";
+      const workspace = wt.split(" — ")[0]?.trim() || wt.split(" - ")[0]?.trim() || "";
+      return {
+        id: c.id,
+        title: c.metadata.chatTitle,
+        window: c.metadata.windowTitle,
+        workspace,
+        active: c.metadata.isActive,
+        phase: c.phase,
+        connectionState: c.connectionState,
+        quota: c.quota || null,
+      };
+    });
 
   broadcast({ type: "cascade_list", cascades: list });
 }

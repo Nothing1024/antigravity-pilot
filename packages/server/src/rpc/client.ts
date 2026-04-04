@@ -61,12 +61,16 @@ export class RPCClient {
     }
 
     try {
-      const { value } = await this.withTransportFallback(ls, (protocol) =>
+      const { value, protocol } = await this.withTransportFallback(ls, (protocol) =>
         protocol === "https"
           ? this.httpsPost(ls, method, body)
           : this.httpPost(ls, method, body),
       );
 
+      const QUIET_METHODS = new Set(["GetCascadeTrajectorySteps", "GetCascadeTrajectory", "GetAllCascadeTrajectories"]);
+      if (!QUIET_METHODS.has(method)) {
+        console.log(`[rpc:client] ${method} via ${protocol.toUpperCase()} port=${ls.httpsPort} status=${value.statusCode}`);
+      }
       if (value.statusCode < 200 || value.statusCode >= 300) {
         let parsed: { code?: string; message?: string } = {};
         try {

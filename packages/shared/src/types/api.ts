@@ -270,3 +270,33 @@ export type RateLimitInfo = {
   reset: string;
 };
 
+// --- Capabilities API ---
+
+export type ServerMode = "hybrid" | "cdp-only" | "rpc-only" | "disconnected";
+
+export type CapabilitiesResponse = {
+  mode: ServerMode;
+  cdp: {
+    enabled: boolean;
+    snapshot: boolean;
+    connected: boolean;
+  };
+  rpc: {
+    enabled: boolean;
+    fallbackToCDP: boolean;
+  };
+  features: {
+    simplify: boolean;
+    screenshot: boolean;
+    clickPassthrough: boolean;
+    scrollSync: boolean;
+    filePreview: boolean;
+    messaging: boolean;
+    trajectory: boolean;
+    conversationHistory: boolean;
+    modelSwitch: boolean;
+    sessionSwitch: boolean;
+    autoActions: boolean;
+    pushNotifications: boolean;
+  };
+};

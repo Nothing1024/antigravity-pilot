@@ -41,6 +41,7 @@ function handleMessage(msg: WSMessage): void {
       return;
     }
     case "phase_change":
+      useCascadeStore.getState().setPhase(msg.cascadeId, msg.phase);
       console.info(`[ws] phase_change ${msg.cascadeId} ${msg.previousPhase} → ${msg.phase}`);
       return;
     case "connection_state":

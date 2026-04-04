@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ResponsePhase } from "@ag/shared";
 import { useI18n } from "../../i18n";
 import { switchConversation } from "../../services/cascadeService";
 import { useCascadeStore } from "../../stores/cascadeStore";
 import { useUIStore } from "../../stores/uiStore";
 import { CascadeList } from "../drawer/CascadeList";
 import { DrawerActions } from "../drawer/DrawerActions";
+import { ModelSelector } from "../chat/ModelSelector";
 
 type Props = {
   title: string;
@@ -36,6 +38,10 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
   const isLarge = useIsLargeScreen();
   const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
   const currentCascadeId = useCascadeStore((s) => s.currentId);
+  const currentCascade = useCascadeStore((s) => s.cascades.find((c) => c.id === s.currentId));
+  const phase = currentCascade?.phase;
+  const isRunning = phase === ResponsePhase.GENERATING || phase === ResponsePhase.THINKING || phase === ResponsePhase.TOOL_RUNNING;
+  const isApproval = phase === ResponsePhase.APPROVAL_PENDING;
   const t = useI18n();
 
   // On app startup, push localStorage settings to server (recovers from server restart)
@@ -158,7 +164,23 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
               <h1 className="truncate font-semibold text-foreground/90 tracking-tight">
                 {title}
               </h1>
+              {/* Live phase indicator */}
+              {isRunning && (
+                <span className="relative flex h-2 w-2 shrink-0 ml-1" title="Running">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                </span>
+              )}
+              {isApproval && (
+                <span className="relative flex h-2 w-2 shrink-0 ml-1" title="Awaiting Approval">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-yellow-500" />
+                </span>
+              )}
             </div>
+
+            {/* Model selector */}
+            <ModelSelector cascadeId={currentCascadeId} />
           </div>
 
           <div className="flex items-center gap-3">

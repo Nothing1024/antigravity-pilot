@@ -10,6 +10,7 @@ import { injectSimplify } from "./simplify";
 import { getSimplifyMode } from "./simplifyState";
 import { captureCSS, captureComputedVars } from "../capture/css";
 import { cascadeStore } from "../store/cascades";
+import { cascadeMap } from "../store/cascadeMap";
 import { broadcastCascadeList } from "../ws/broadcast";
 import { getJson } from "../utils/network";
 import { hashString } from "../utils/hash";
@@ -25,8 +26,14 @@ const pendingTargets = new Set<string>();
  * Note: CDP is still required for UI mirror (Shadow DOM snapshot) and as a
  * degradation fallback when RPC is unavailable.
  */
+let cdpFirstRun = true;
+
 export async function discover(): Promise<void> {
   if (!config.cdp.enabled) {
+    if (cdpFirstRun) {
+      console.log(`[cdp:discovery] CDP disabled by config, skipping`);
+      cdpFirstRun = false;
+    }
     // CDP disabled: close existing connections and clear store to avoid leaking resources.
     const oldMap = new Map(cascadeStore.entries());
     if (oldMap.size > 0) {
@@ -41,6 +48,11 @@ export async function discover(): Promise<void> {
       broadcastCascadeList();
     }
     return;
+  }
+
+  if (cdpFirstRun) {
+    console.log(`[cdp:discovery] scanning ports: ${config.cdp.ports.join(', ')} | snapshot loop: ${config.cdp.enableSnapshot ? 'on' : 'off'}`);
+    cdpFirstRun = false;
   }
 
   // 1. Find all targets
@@ -193,6 +205,7 @@ export async function discover(): Promise<void> {
   for (const [id, c] of oldMap.entries()) {
     if (!newCascades.has(id)) {
       console.log(`👋 Removing cascade: ${c.metadata.chatTitle}`);
+      cascadeMap.delete(id);
       try {
         c.cdp.ws.close();
       } catch {
@@ -219,4 +232,14 @@ export async function discover(): Promise<void> {
   }
 
   if (changed) broadcastCascadeList();
+
+  // 4. Hybrid mode: enrich unmapped cascades with RPC conversation UUIDs
+  if (config.rpc.enabled) {
+    for (const [id, c] of newCascades.entries()) {
+      if (!cascadeMap.getByCascade(id)) {
+        // Fire-and-forget: don't block discovery loop
+        void cascadeMap.enrich(id, c.metadata.windowTitle).catch(() => {});
+      }
+    }
+  }
 }

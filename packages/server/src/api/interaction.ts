@@ -1,7 +1,9 @@
 import express from "express";
 
+import { ResponsePhase } from "@ag/shared";
 import { captureHTML } from "../capture/html";
 import { injectMessage } from "../cdp/inject";
+import { eventBus } from "../events/bus";
 import { sendMessageWithFallback } from "../rpc/fallback";
 import { conversationSignals } from "../rpc/signals";
 import { cascadeStore } from "../store/cascades";
@@ -765,4 +767,74 @@ interactionRouter.post("/new-conversation/:id", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// --- Stop generation ---
+interactionRouter.post("/api/stop/:id", async (req, res) => {
+  const c = cascadeStore.get(req.params.id);
+  if (!c) return res.status(404).json({ error: "Cascade not found" });
+
+  // Try CDP first: click the IDE's Stop button
+  if (c.cdp?.rootContextId) {
+    try {
+      const result = await c.cdp.call("Runtime.evaluate", {
+        expression: `(() => {
+          // Try multiple selectors for the stop button
+          const selectors = [
+            '[data-tooltip-id*="stop"]',
+            '[data-tooltip-id*="cancel"]',
+            'button[aria-label*="Stop"]',
+            'button[aria-label*="stop"]',
+            'button[aria-label*="Cancel"]',
+          ];
+          for (const sel of selectors) {
+            const btn = document.querySelector(sel);
+            if (btn) {
+              const style = getComputedStyle(btn);
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
+                btn.click();
+                return { ok: true, selector: sel };
+              }
+            }
+          }
+          return { ok: false, reason: 'stop button not found' };
+        })()`,
+        returnByValue: true,
+        contextId: c.cdp.rootContextId,
+      });
+
+      const val = result.result?.value;
+      if (val?.ok) {
+        console.log(`🛑 Stop clicked via CDP: ${val.selector}`);
+        // Transition phase to IDLE
+        const previousPhase = c.phase ?? ResponsePhase.GENERATING;
+        c.phase = ResponsePhase.IDLE;
+        cascadeStore.set(c.id, c);
+        eventBus.emit("phase_change", {
+          cascadeId: c.id,
+          phase: ResponsePhase.IDLE,
+          previousPhase,
+          timestamp: Date.now(),
+        });
+        return res.json({ success: true, method: "cdp" });
+      }
+
+      console.log(`⚠️ Stop button not found via CDP, cascade may already be idle`);
+      return res.json({ success: true, method: "none", reason: "stop button not visible" });
+    } catch (e: any) {
+      console.warn(`⚠️ CDP stop failed: ${e.message}`);
+    }
+  }
+
+  // Fallback: just transition the phase
+  const previousPhase = c.phase ?? ResponsePhase.GENERATING;
+  c.phase = ResponsePhase.IDLE;
+  cascadeStore.set(c.id, c);
+  eventBus.emit("phase_change", {
+    cascadeId: c.id,
+    phase: ResponsePhase.IDLE,
+    previousPhase,
+    timestamp: Date.now(),
+  });
+  res.json({ success: true, method: "phase_only" });
 });
