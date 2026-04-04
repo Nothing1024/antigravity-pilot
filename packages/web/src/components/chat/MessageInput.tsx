@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ResponsePhase } from "@ag/shared";
+import { useConversations } from "../../hooks/useConversations";
+import { useLegacyCascadeState } from "../../hooks/useLegacyCascade";
 import { apiUrl } from "../../services/api";
 import { useI18n } from "../../i18n";
 import { useUIStore } from "../../stores/uiStore";
-import { useCascadeStore } from "../../stores/cascadeStore";
 import { ConfirmModal } from "../common/ConfirmModal";
 
 type Props = {
@@ -29,11 +30,51 @@ async function postSend(cascadeId: string, message: string): Promise<void> {
   throw new Error(reason);
 }
 
+async function postSendRpc(conversationId: string, message: string): Promise<void> {
+  const clientMessageId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `msg-${Date.now()}`;
+  const res = await fetch(
+    apiUrl(`/api/conversations/${encodeURIComponent(conversationId)}/messages`),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        items: [{ type: "text", text: message }],
+        clientMessageId,
+      }),
+    },
+  );
+  if (res.ok) return;
+  let reason = `HTTP ${res.status}`;
+  try {
+    const data: any = await res.json();
+    if (data?.error) reason = String(data.error);
+    if (data?.reason) reason = String(data.reason);
+  } catch {
+    // ignore
+  }
+  throw new Error(reason);
+}
+
 async function postStop(cascadeId: string): Promise<void> {
   await fetch(apiUrl(`/api/stop/${encodeURIComponent(cascadeId)}`), {
     method: "POST",
     headers: { "content-type": "application/json" },
   });
+}
+
+async function postStopRpc(conversationId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/conversations/${encodeURIComponent(conversationId)}/stop`),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    },
+  );
+  if (res.ok) return;
+  throw new Error(`HTTP ${res.status}`);
 }
 
 /**
@@ -46,6 +87,8 @@ const drafts = new Map<string, string>();
 
 export function MessageInput({ cascadeId }: Props) {
   const t = useI18n();
+  const { currentConversation, currentConversationId } = useConversations();
+  const { getLegacyCascadeById } = useLegacyCascadeState();
   // Initialise from stored draft for this cascade
   const [text, setTextRaw] = useState(() => (cascadeId ? drafts.get(cascadeId) || "" : ""));
   const [sending, setSending] = useState(false);
@@ -56,8 +99,8 @@ export function MessageInput({ cascadeId }: Props) {
   const sendMode = useUIStore((s) => s.sendMode);
 
   // Get phase for current cascade
-  const currentCascade = useCascadeStore((s) => s.cascades.find((c) => c.id === cascadeId));
-  const phase = currentCascade?.phase;
+  const currentCascade = getLegacyCascadeById(cascadeId);
+  const phase = currentCascade?.phase ?? currentConversation?.phase;
   const isRunning = phase === ResponsePhase.GENERATING || phase === ResponsePhase.THINKING || phase === ResponsePhase.TOOL_RUNNING;
   const isApprovalPending = phase === ResponsePhase.APPROVAL_PENDING;
 
@@ -99,23 +142,39 @@ export function MessageInput({ cascadeId }: Props) {
     setText("");
 
     try {
+      if (currentConversationId) {
+        try {
+          await postSendRpc(currentConversationId, msg);
+          return;
+        } catch {
+          // Fall back to the legacy CDP-backed endpoint below.
+        }
+      }
       await postSend(cascadeId, msg);
     } catch {
       setText(msg);
     } finally {
       setSending(false);
     }
-  }, [cascadeId, sending, text, setText]);
+  }, [cascadeId, currentConversationId, sending, text, setText]);
 
   const stop = useCallback(async () => {
     if (!cascadeId || stopping) return;
     setStopping(true);
     try {
+      if (currentConversationId) {
+        try {
+          await postStopRpc(currentConversationId);
+          return;
+        } catch {
+          // Fall back to the legacy CDP-backed endpoint below.
+        }
+      }
       await postStop(cascadeId);
     } finally {
       setTimeout(() => setStopping(false), 1500);
     }
-  }, [cascadeId, stopping]);
+  }, [cascadeId, currentConversationId, stopping]);
 
   const isMac = typeof window !== "undefined" && window.navigator.platform.includes("Mac");
   const canSend = !!cascadeId && !sending && !!text.trim() && !isRunning;

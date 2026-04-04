@@ -11,7 +11,7 @@
 
 ---
 
-**Antigravity Pilot** is a lightweight Web UI and API service that connects to [Antigravity IDE](https://antigravity.google) via Chrome DevTools Protocol (CDP). It mirrors the IDE's chat in real-time, lets you send messages, click buttons, manage sessions — from any browser, on any device — and exposes an **OpenAI-compatible API** for programmatic control.
+**Antigravity Pilot** is a lightweight Web UI and API service for [Antigravity IDE](https://antigravity.google) with an **RPC-First** architecture. Conversation listing, message delivery, step streaming, and the OpenAI-compatible API now default to Language Server RPC; CDP remains an optional enhancement for UI mirroring, click passthrough, screenshots, and compatibility fallback.
 
 <p align="center">
   <img src="assets/demo.png" alt="Antigravity Pilot Web UI" width="800" />
@@ -56,20 +56,20 @@ open -a "Antigravity" --args --disable-gpu-driver-bug-workarounds --ignore-gpu-b
 ## Architecture
 
 ```
-┌─────────────────┐      CDP / WebSocket       ┌────────────────┐      HTTP / WS      ┌───────────┐
-│   Antigravity    │◄──────────────────────────►│   @ag/server   │◄────────────────────►│  Browser  │
-│      IDE         │   Ports 9000–9003          │   Port 3563    │                      │   (PWA)   │
-│   (Electron)     │                            │  (Express+WS)  │                      │           │
-└─────────────────┘                             └────────┬───────┘                      └───────────┘
-                                                         │
-                                            /v1/chat/completions
-                                                         │
-                                                ┌────────┴───────┐
-                                                │  OpenAI SDK /  │
-                                                │  LangChain /   │
-                                                │  OpenClaw /    │
-                                                │  Dify / n8n    │
-                                                └────────────────┘
+┌─────────────────┐   LS RPC (default) / CDP (optional)   ┌────────────────┐      HTTP / WS      ┌───────────┐
+│   Antigravity   │◄──────────────────────────────────────►│   @ag/server   │◄────────────────────►│  Browser  │
+│      IDE        │   RPC: conversations / steps / send    │   Port 3563    │                      │   (PWA)   │
+│   (Electron)    │   CDP: mirror / click / screenshot     │  (Express+WS)  │                      │           │
+└─────────────────┘                                         └────────┬───────┘                      └───────────┘
+                                                                      │
+                                                         /v1/chat/completions
+                                                                      │
+                                                             ┌────────┴───────┐
+                                                             │  OpenAI SDK /  │
+                                                             │  LangChain /   │
+                                                             │  OpenClaw /    │
+                                                             │  Dify / n8n    │
+                                                             └────────────────┘
 ```
 
 **Monorepo structure (pnpm workspaces):**
@@ -77,8 +77,8 @@ open -a "Antigravity" --args --disable-gpu-driver-bug-workarounds --ignore-gpu-b
 | Package | Role |
 |---------|------|
 | `@ag/shared` | TypeScript types and WebSocket message protocol |
-| `@ag/server` | Express backend — CDP management, snapshot loop, auto-actions, push notifications |
-| `@ag/web` | React 19 + Vite frontend — Shadow DOM renderer, Zustand state, i18n |
+| `@ag/server` | Express backend — RPC-First conversations API, optional CDP management, snapshot loop, auto-actions, push notifications |
+| `@ag/web` | React 19 + Vite frontend — RPC conversation list, Shadow DOM renderer, Zustand state, i18n |
 
 <br />
 
@@ -104,10 +104,11 @@ Edit `config.json` in the project root:
     "idlePollInterval": 5000          // Idle heartbeat interval (ms)
   },
 
-  // CDP (UI mirror + fallback)
+  // CDP (optional enhancement for UI mirror + fallback)
   "cdp": {
     "enabled": true,                  // Enable CDP connections
     "enableSnapshot": false,          // Enable HTML snapshot loop (Shadow DOM mirror)
+    "optional": false,                // true = allow RPC-Only mode without CDP discovery
     "ports": [9000, 9001, 9002, 9003] // CDP ports to scan
   },
 
@@ -134,6 +135,8 @@ Edit `config.json` in the project root:
   ]
 }
 ```
+
+`RPC-First` is the default runtime mode. If you want to run without any CDP discovery dependency, set `cdp.optional: true`; RPC conversations and OpenAI-compatible calls will keep working, while CDP-only endpoints such as screenshots, active file preview, and tab control will return `503 CDP not available`.
 
 ### Client-side Settings (persisted in localStorage)
 
@@ -224,7 +227,7 @@ node test-api.mjs http://localhost:3563 sk-pilot-change-me
 | API | OpenAI-compatible · SSE Streaming |
 | i18n | Lightweight custom (zero deps) |
 | DOM Diffing | morphdom |
-| Protocol | Chrome DevTools Protocol (CDP) |
+| Protocol | Language Server RPC (default) + CDP (optional enhancement) |
 | PWA | Service Worker · Web Push (VAPID) |
 
 <br />

@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 
 import { ResponsePhase } from "@ag/shared";
+import { useConversations } from "../../hooks/useConversations";
 import { useI18n } from "../../i18n";
-import { switchConversation } from "../../services/cascadeService";
-import { useCascadeStore } from "../../stores/cascadeStore";
+import { createConversationRpc } from "../../services/conversations";
 
 type Props = {
   onSelect?: () => void;
@@ -45,19 +45,36 @@ function PhaseIndicator({ phase }: { phase?: ResponsePhase }) {
 
 export function CascadeList({ onSelect }: Props) {
   const t = useI18n();
-  const cascades = useCascadeStore((s) => s.cascades);
-  const currentId = useCascadeStore((s) => s.currentId);
-  const selectCascade = useCascadeStore((s) => s.selectCascade);
+  const {
+    conversations,
+    currentConversationId,
+    refreshConversations,
+    selectConversation,
+  } = useConversations();
 
   const onPick = useCallback(
     (id: string) => {
-      selectCascade(id);
+      selectConversation(id);
       onSelect?.();
     },
-    [onSelect, selectCascade]
+    [onSelect, selectConversation]
   );
 
-  if (cascades.length === 0) {
+  const createConversation = useCallback(
+    async (workspaceUri?: string) => {
+      try {
+        const conversationId = await createConversationRpc(workspaceUri);
+        selectConversation(conversationId);
+        await refreshConversations();
+        onSelect?.();
+      } catch {
+        // ignore
+      }
+    },
+    [onSelect, refreshConversations, selectConversation],
+  );
+
+  if (conversations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-2 opacity-50"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
@@ -68,12 +85,15 @@ export function CascadeList({ onSelect }: Props) {
 
   return (
     <div className="flex flex-col gap-1">
-      {cascades.map((c) => {
-        const active = c.id === currentId;
-        const isRunning = c.phase === ResponsePhase.GENERATING || c.phase === ResponsePhase.THINKING || c.phase === ResponsePhase.TOOL_RUNNING;
+      {conversations.map((conversation) => {
+        const active = conversation.id === currentConversationId;
+        const isRunning =
+          conversation.phase === ResponsePhase.GENERATING ||
+          conversation.phase === ResponsePhase.THINKING ||
+          conversation.phase === ResponsePhase.TOOL_RUNNING;
         return (
           <button
-            key={c.id}
+            key={conversation.id}
             type="button"
             className={[
               "group relative flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition-colors duration-200",
@@ -82,17 +102,17 @@ export function CascadeList({ onSelect }: Props) {
                 : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               isRunning ? "ring-1 ring-green-500/20" : "",
             ].join(" ")}
-            onClick={() => onPick(c.id)}
+            onClick={() => onPick(conversation.id)}
           >
             <div className="flex items-center gap-2">
-              <PhaseIndicator phase={c.phase} />
+              <PhaseIndicator phase={conversation.phase} />
               <div className={["truncate text-[13px] leading-tight flex-1 pr-6", active ? "font-semibold" : "font-medium"].join(" ")}>
-                {c.title || t("cascadeList.untitled")}
+                {conversation.title || t("cascadeList.untitled")}
               </div>
             </div>
-            {c.workspace && (
+            {conversation.workspace && (
               <div className={["truncate text-[11px] pl-4 pr-6", active ? "text-primary/70" : "text-muted-foreground/50"].join(" ")}>
-                {c.workspace}
+                {conversation.workspace}
               </div>
             )}
 
@@ -104,7 +124,7 @@ export function CascadeList({ onSelect }: Props) {
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-70 hover:!opacity-100 hover:bg-muted/80"
               onClick={(e) => {
                 e.stopPropagation();
-                void switchConversation(c.id);
+                void createConversation(conversation.workspaceUri);
               }}
               // Empty handler required: a11y lint requires onKeyDown when role="button"
               onKeyDown={() => {}}

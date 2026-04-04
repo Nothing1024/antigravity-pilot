@@ -29,9 +29,12 @@ const pendingTargets = new Set<string>();
 let cdpFirstRun = true;
 
 export async function discover(): Promise<void> {
-  if (!config.cdp.enabled) {
+  if (!config.cdp.enabled || config.cdp.optional) {
     if (cdpFirstRun) {
-      console.log(`[cdp:discovery] CDP disabled by config, skipping`);
+      const reason = !config.cdp.enabled
+        ? "CDP disabled by config"
+        : "CDP optional mode enabled";
+      console.log(`[cdp:discovery] ${reason}, skipping`);
       cdpFirstRun = false;
     }
     // CDP disabled: close existing connections and clear store to avoid leaking resources.

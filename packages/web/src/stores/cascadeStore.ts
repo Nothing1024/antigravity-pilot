@@ -49,3 +49,4 @@ export const useCascadeStore = create<State>((set, get) => ({
     })),
 }));
 
+export const cascadeStoreApi = useCascadeStore;

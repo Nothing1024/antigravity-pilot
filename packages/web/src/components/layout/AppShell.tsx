@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { ResponsePhase } from "@ag/shared";
+import { useConversations } from "../../hooks/useConversations";
+import { useLegacyCascadeState } from "../../hooks/useLegacyCascade";
 import { useI18n } from "../../i18n";
 import { switchConversation } from "../../services/cascadeService";
-import { useCascadeStore } from "../../stores/cascadeStore";
+import { createConversationRpc } from "../../services/conversations";
 import { useUIStore } from "../../stores/uiStore";
 import { CascadeList } from "../drawer/CascadeList";
 import { DrawerActions } from "../drawer/DrawerActions";
@@ -37,9 +39,10 @@ function useIsLargeScreen() {
 export function AppShell({ title, children, onOpenProject, view, onViewChange }: Props) {
   const isLarge = useIsLargeScreen();
   const pushAutoActionsToServer = useUIStore((s) => s.pushAutoActionsToServer);
-  const currentCascadeId = useCascadeStore((s) => s.currentId);
-  const currentCascade = useCascadeStore((s) => s.cascades.find((c) => c.id === s.currentId));
-  const phase = currentCascade?.phase;
+  const { currentConversation, refreshConversations, selectConversation } =
+    useConversations();
+  const { currentLegacyCascade, currentLegacyId } = useLegacyCascadeState();
+  const phase = currentLegacyCascade?.phase ?? currentConversation?.phase;
   const isRunning = phase === ResponsePhase.GENERATING || phase === ResponsePhase.THINKING || phase === ResponsePhase.TOOL_RUNNING;
   const isApproval = phase === ResponsePhase.APPROVAL_PENDING;
   const t = useI18n();
@@ -62,6 +65,24 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
   const [mobileOpen, setMobileOpen] = useState(false);
   const openMobile = useCallback(() => setMobileOpen(true), []);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  const createConversation = useCallback(async () => {
+    try {
+      const conversationId = await createConversationRpc(
+        currentConversation?.workspaceUri,
+      );
+      selectConversation(conversationId);
+      await refreshConversations();
+    } catch {
+      if (!currentLegacyId) return;
+      await switchConversation(currentLegacyId);
+    }
+  }, [
+    currentConversation?.workspaceUri,
+    currentLegacyId,
+    refreshConversations,
+    selectConversation,
+  ]);
 
   // Close mobile drawer when switching to large screen
   useEffect(() => { if (isLarge) setMobileOpen(false); }, [isLarge]);
@@ -154,8 +175,7 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
                 className="font-medium text-muted-foreground/60 hidden sm:inline-block hover:text-primary/80 transition-colors cursor-pointer"
                 title={t("drawer.newConversation")}
                 onClick={() => {
-                  if (!currentCascadeId) return;
-                  void switchConversation(currentCascadeId);
+                  void createConversation();
                 }}
               >
                 {t("shell.workspace")}
@@ -180,7 +200,7 @@ export function AppShell({ title, children, onOpenProject, view, onViewChange }:
             </div>
 
             {/* Model selector */}
-            <ModelSelector cascadeId={currentCascadeId} />
+            <ModelSelector cascadeId={currentLegacyId} />
           </div>
 
           <div className="flex items-center gap-3">

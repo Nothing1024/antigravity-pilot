@@ -56,7 +56,7 @@ async function loadApiRouters(): Promise<express.Router[]> {
     routers.push(mod.statusRouter || mod.router || mod.default);
   } catch {}
 
-  // Phase 2: Session & Model API
+  // Deprecated: use /api/conversations for session and conversation management.
   try {
     const mod: any = await import("./api/session");
     routers.push(mod.sessionRouter || mod.router || mod.default);

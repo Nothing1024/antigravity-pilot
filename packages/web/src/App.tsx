@@ -7,10 +7,10 @@ import { ProjectBrowser } from "./components/modals/ProjectBrowser";
 import { SettingsView } from "./components/settings/SettingsView";
 import { Toast } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { useConversations } from "./hooks/useConversations";
 import { useTheme } from "./hooks/useTheme";
 import { useI18n } from "./i18n";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { useCascadeStore } from "./stores/cascadeStore";
 import { useCapabilitiesStore } from "./stores/capabilitiesStore";
 import { apiUrl } from "./services/api";
 
@@ -25,10 +25,8 @@ function AuthenticatedApp() {
   const fetchCapabilities = useCapabilitiesStore((s) => s.fetchCapabilities);
   useEffect(() => { fetchCapabilities(); }, [fetchCapabilities]);
 
-  const title = useCascadeStore((s) => {
-    const cur = s.currentId ? s.cascades.find((c) => c.id === s.currentId) : null;
-    return cur?.title || "Antigravity Pilot";
-  });
+  const { currentConversation } = useConversations();
+  const title = currentConversation?.title || "Antigravity Pilot";
   const [projectOpen, setProjectOpen] = useState(false);
   const openProject = useCallback(() => setProjectOpen(true), []);
   const closeProject = useCallback(() => setProjectOpen(false), []);

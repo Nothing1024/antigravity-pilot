@@ -73,6 +73,7 @@ export type RpcConfig = {
 export type CdpConfig = {
   enabled: boolean;
   enableSnapshot: boolean;
+  optional: boolean;
   ports: number[];
 };
 
@@ -236,6 +237,7 @@ export function loadConfig(): AppConfig {
   const cdp: CdpConfig = {
     enabled: userConfig.cdp?.enabled ?? true,
     enableSnapshot: userConfig.cdp?.enableSnapshot ?? false,
+    optional: userConfig.cdp?.optional ?? false,
     ports: Array.isArray(userConfig.cdp?.ports)
       ? userConfig.cdp.ports
       : Array.from(DEFAULT_CDP_PORTS),

@@ -1,10 +1,9 @@
 import type { TrajectoryStep } from "../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { marked } from "marked";
-import { apiUrl } from "../services/api";
 
+import { useConversations } from "../hooks/useConversations";
 import { useStepsStream } from "../hooks/useStepsStream";
-import { useCascadeStore } from "../stores/cascadeStore";
 import { useCapabilitiesStore } from "../stores/capabilitiesStore";
 import { ChatViewport } from "./chat/ChatViewport";
 import type { FileChange } from "./chat/FileChangesBar";
@@ -407,48 +406,28 @@ export function ChatPanel({
   onActionButtons,
 }: Props) {
   const { steps, connected, running, error, switchTo } = useStepsStream(cascadeId);
+  const {
+    conversations,
+    currentConversationId,
+    selectConversation,
+  } = useConversations();
   const cdpSnapshotEnabled = useCapabilitiesStore((s) => s.capabilities.cdp.snapshot);
   const [visibleTurns, setVisibleTurns] = useState(DEFAULT_VISIBLE_TURNS);
 
-  // ── Conversation history ──
-  type ConvSummary = { id: string; status: string; numTotalSteps: number; workspace?: string };
-  const [conversations, setConversations] = useState<ConvSummary[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
-
-  // Get workspace from current cascade for filtering
-  const cascades = useCascadeStore((s) => s.cascades);
-  const currentCascade = cascades.find((c) => c.id === cascadeId);
-  const workspaceUri = currentCascade?.workspaceUri ?? currentCascade?.workspace ?? "";
-
   // Reset local state when cascade changes
   useEffect(() => {
-    setConversations([]);
-    setActiveConvId(null);
     setVisibleTurns(DEFAULT_VISIBLE_TURNS);
   }, [cascadeId]);
 
-  // Fetch conversation list on mount and periodically, scoped to workspace
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const wsParam = workspaceUri ? `?workspace=${encodeURIComponent(workspaceUri)}` : "";
-        const res = await fetch(apiUrl(`/api/conversations/history${wsParam}`));
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data.conversations)) {
-          setConversations(data.conversations);
-        }
-      } catch { /* ignore */ }
-    };
-    void load();
-    const timer = setInterval(load, 30_000); // refresh every 30s
-    return () => { cancelled = true; clearInterval(timer); };
-  }, [cascadeId, workspaceUri]);
+    if (!currentConversationId) return;
+    switchTo(currentConversationId);
+  }, [currentConversationId, switchTo]);
 
   const handleConvSwitch = useCallback((convId: string) => {
-    setActiveConvId(convId);
+    selectConversation(convId);
     switchTo(convId);
-  }, [switchTo]);
+  }, [selectConversation, switchTo]);
 
   const turns = useMemo(() => buildTurns(steps), [steps]);
 
@@ -503,15 +482,14 @@ export function ChatPanel({
               <select
                 className="rounded bg-muted/30 border border-border/30 px-1.5 py-0.5 text-[10px] text-muted-foreground
                   focus:outline-none focus:ring-1 focus:ring-blue-500/30 max-w-[140px]"
-                value={activeConvId ?? ""}
+                value={currentConversationId ?? ""}
                 onChange={(e) => handleConvSwitch(e.target.value)}
               >
                 <option value="" disabled>切换会话</option>
                 {conversations.map((c, i) => (
                   <option key={c.id} value={c.id}>
-                    {c.status === "RUNNING" ? "▶ " : ""}
-                    #{i + 1} ({c.numTotalSteps}步)
-                    {c.id.slice(0, 6)}
+                    {c.status === "CASCADE_RUN_STATUS_RUNNING" ? "▶ " : ""}
+                    {`#${i + 1} ${c.title} (${c.numTotalSteps}步)`}
                   </option>
                 ))}
               </select>

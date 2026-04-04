@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useCascadeStore } from "../../stores/cascadeStore";
+import { useConversations } from "../../hooks/useConversations";
+import { useLegacyCascadeState } from "../../hooks/useLegacyCascade";
 import { useUIStore } from "../../stores/uiStore";
 import { apiUrl } from "../../services/api";
 import { ChatPanel } from "../ChatPanel";
@@ -21,12 +22,14 @@ type ToolbarPopup = {
 };
 
 export function ChatView() {
-  const cascades = useCascadeStore((s) => s.cascades);
-  const currentId = useCascadeStore((s) => s.currentId);
+  const { conversations, currentConversationId, loading } = useConversations();
+  const { currentLegacyId } = useLegacyCascadeState();
   const debugCascadeId = import.meta.env.DEV
     ? ((import.meta.env.VITE_DEBUG_CASCADE_ID as string | undefined) ?? null)
     : null;
-  const activeId = currentId || debugCascadeId;
+  const activeId = currentLegacyId || debugCascadeId;
+  const hasRpcConversations =
+    conversations.length > 0 || currentConversationId !== null;
   const serverMode = useCapabilitiesStore((s) => s.capabilities.mode);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [launching, setLaunching] = useState(false);
@@ -132,7 +135,7 @@ export function ChatView() {
   }, [activeId]);
 
   // Empty state
-  if (cascades.length === 0 && !activeId) {
+  if (!activeId) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-muted">
@@ -145,7 +148,9 @@ export function ChatView() {
 
         <h2 className="mb-1 text-lg font-semibold tracking-tight">No Active Sessions</h2>
         <p className="mb-6 max-w-[280px] text-sm text-muted-foreground">
-          Connect to an Antigravity IDE instance to start remote monitoring.
+          {hasRpcConversations && !loading
+            ? "Connect to an active Antigravity IDE instance to load the selected conversation."
+            : "Connect to an Antigravity IDE instance to start remote monitoring."}
         </p>
 
         <button

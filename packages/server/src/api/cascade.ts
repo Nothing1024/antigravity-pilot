@@ -180,6 +180,9 @@ cascadeRouter.get("/api/quota/:id", (req, res) => {
 // --- Active Tab Name API (lightweight, for before/after click detection) ---
 cascadeRouter.get("/api/active-tab-name/:id", async (req, res) => {
   const c = cascadeStore.get(req.params.id);
+  if (config.cdp.optional && !c?.cdp?.rootContextId) {
+    return res.status(503).json({ error: "CDP not available" });
+  }
   if (!c) return res.status(404).json({ error: "Cascade not found" });
 
   try {
@@ -210,6 +213,9 @@ cascadeRouter.get("/api/active-tab-name/:id", async (req, res) => {
 // --- Active File API (reads from Editor's active tab via CDP) ---
 cascadeRouter.get("/api/active-file/:id", async (req, res) => {
   const c = cascadeStore.get(req.params.id);
+  if (config.cdp.optional && !c?.cdp?.rootContextId) {
+    return res.status(503).json({ error: "CDP not available" });
+  }
   if (!c) return res.status(404).json({ error: "Cascade not found" });
 
   try {
@@ -411,6 +417,9 @@ cascadeRouter.get("/api/active-file/:id", async (req, res) => {
 // --- Close Active Tab API (sync file close from web UI to IDE) ---
 cascadeRouter.post("/api/close-tab/:id", async (req, res) => {
   const c = cascadeStore.get(req.params.id);
+  if (config.cdp.optional && !c?.cdp?.rootContextId) {
+    return res.status(503).json({ error: "CDP not available" });
+  }
   if (!c) return res.status(404).json({ error: "Cascade not found" });
 
   try {

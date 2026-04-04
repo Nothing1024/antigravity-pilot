@@ -1,3 +1,4 @@
+/** @deprecated Use /api/conversations instead. This file will be removed in v4.0. */
 /**
  * Session API (F3/Phase 2) — List, switch, and create chat sessions
  * within the Antigravity IDE via CDP DOM inspection.
@@ -13,6 +14,8 @@ import { broadcast } from "../ws/broadcast";
 import { hashString } from "../utils/hash";
 
 export const sessionRouter: express.Router = express.Router();
+
+console.warn("⚠️ session.ts routes are deprecated. Use /api/conversations instead.");
 
 // --- CDP Scripts ---
 

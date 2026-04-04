@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
 
+import { useConversations } from "../../hooks/useConversations";
+import { useLegacyCascadeState } from "../../hooks/useLegacyCascade";
 import { useI18n } from "../../i18n";
 import { apiUrl } from "../../services/api";
-import { useCascadeStore } from "../../stores/cascadeStore";
+import { createConversationRpc } from "../../services/conversations";
 import { ConfirmModal } from "../common/ConfirmModal";
 
 type Props = {
@@ -18,18 +20,35 @@ async function post(pathname: string): Promise<void> {
 
 export function DrawerActions({ onOpenProject, onDone }: Props) {
   const t = useI18n();
-  const currentId = useCascadeStore((s) => s.currentId);
+  const { currentConversation, refreshConversations, selectConversation } =
+    useConversations();
+  const { currentLegacyId } = useLegacyCascadeState();
   const [showKillConfirm, setShowKillConfirm] = useState(false);
 
   const newConversation = useCallback(async () => {
-    if (!currentId) return;
     try {
-      await post(`/new-conversation/${encodeURIComponent(currentId)}`);
+      const conversationId = await createConversationRpc(
+        currentConversation?.workspaceUri,
+      );
+      selectConversation(conversationId);
+      await refreshConversations();
       onDone?.();
     } catch {
-      // ignore
+      if (!currentLegacyId) return;
+      try {
+        await post(`/new-conversation/${encodeURIComponent(currentLegacyId)}`);
+        onDone?.();
+      } catch {
+        // ignore
+      }
     }
-  }, [currentId, onDone]);
+  }, [
+    currentConversation?.workspaceUri,
+    currentLegacyId,
+    onDone,
+    refreshConversations,
+    selectConversation,
+  ]);
 
   const killAll = useCallback(async () => {
     try {
@@ -47,7 +66,6 @@ export function DrawerActions({ onOpenProject, onDone }: Props) {
         type="button"
         className="group inline-flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
         onClick={() => void newConversation()}
-        disabled={!currentId}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-80 group-hover:opacity-100 transition-opacity"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
         {t("drawer.newConversation")}
