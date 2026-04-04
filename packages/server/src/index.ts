@@ -68,6 +68,11 @@ async function loadApiRouters(): Promise<express.Router[]> {
     routers.push(mod.workspaceRouter || mod.router || mod.default);
   } catch {}
 
+  try {
+    const mod: any = await import("./api/conversations");
+    routers.push(mod.conversationsRouter || mod.router || mod.default);
+  } catch {}
+
   // F4: OpenAI-Compatible API
   if (config.api.openaiCompat) {
     try {
