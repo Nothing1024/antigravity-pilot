@@ -17,6 +17,14 @@ import { WebSocket, WebSocketServer } from "ws";
 import { config } from "../config";
 import { getStepCount, rpcForConversation, discovery, rpc } from "./routing";
 import { conversationSignals } from "./signals";
+import { messageTracker } from "./message-tracker";
+import {
+  MAX_SKIP,
+  findNextValidOffset,
+  isRecoverableStepError,
+  oversizedStepOffset,
+  placeholderStep,
+} from "./step-recovery";
 import { cascadeStore } from "../store/cascades";
 import { cascadeMap } from "../store/cascadeMap";
 
@@ -127,6 +135,7 @@ export function setupConversationWebSocket(
       }
 
       let lastStepCount = 0;
+      let lastFetchOffset = 0;
       // 一旦证明某个 offset 之前存在“毒数据”，则不再 overlap 到它之前
       let minFetchOffset = 0;
       let destroyed = false;
@@ -198,6 +207,7 @@ export function setupConversationWebSocket(
       const fetchAndPush = async (withOverlap = false): Promise<boolean> => {
         if (!realCascadeId) return false;
         const fetchOffset = getFetchOffset(lastStepCount, minFetchOffset, withOverlap);
+        lastFetchOffset = fetchOffset;
 
         const data = (await rpcForConversation(
           "GetCascadeTrajectorySteps",
@@ -210,9 +220,14 @@ export function setupConversationWebSocket(
         const rawData = data as Record<string, unknown>;
         const rawSteps = (rawData.steps ?? rawData.trajectorySteps ?? []) as Record<string, unknown>[];
         if (rawSteps.length === 0) return false;
+        const annotatedRawSteps = messageTracker.annotateSteps(
+          realCascadeId,
+          fetchOffset,
+          rawSteps,
+        ) as Record<string, unknown>[];
 
         // Transform protobuf oneof steps into normalized TrajectoryStep with content.text
-        const steps: TrajectoryStep[] = rawSteps.map((raw) => {
+        const steps: TrajectoryStep[] = annotatedRawSteps.map((raw, index) => {
           const type = (raw.type as string ?? "").replace(/^CORTEX_STEP_TYPE_/, "");
           const status = (raw.status as string ?? "").replace(/^CORTEX_STEP_STATUS_/, "");
           const metadata = raw.metadata as Record<string, unknown> | undefined;
@@ -308,13 +323,17 @@ export function setupConversationWebSocket(
             }
           }
 
-          return {
-            stepId: (metadata?.executionId as string) ?? `step-${fetchOffset}`,
+          const normalized: TrajectoryStep & { clientMessageId?: string } = {
+            stepId: (metadata?.executionId as string) ?? `step-${fetchOffset + index}`,
             type,
             status,
             content: text ? { text } : undefined,
             ...(toolOnly ? { toolOnly: true } : {}),
           };
+          if (typeof raw.clientMessageId === "string") {
+            normalized.clientMessageId = raw.clientMessageId;
+          }
+          return normalized;
         });
 
         const nextEnd = fetchOffset + steps.length;
@@ -341,10 +360,15 @@ export function setupConversationWebSocket(
             const trajectory = traj.trajectory as Record<string, unknown> | undefined;
             if (trajectory?.steps && Array.isArray(trajectory.steps)) {
               const fullSteps = trajectory.steps as Record<string, unknown>[];
+              const annotatedFullSteps = messageTracker.annotateSteps(
+                realCascadeId,
+                0,
+                fullSteps,
+              ) as Record<string, unknown>[];
               console.log(`[ws:${shortId}] enriching ${fullSteps.length} steps with full content`);
 
               // Build enriched normalized steps from full trajectory
-              const enrichedSteps: TrajectoryStep[] = fullSteps.map((raw, idx) => {
+              const enrichedSteps: TrajectoryStep[] = annotatedFullSteps.map((raw, idx) => {
                 const type = (raw.type as string ?? "").replace(/^CORTEX_STEP_TYPE_/, "");
                 const status = (raw.status as string ?? "").replace(/^CORTEX_STEP_STATUS_/, "");
                 const metadata = raw.metadata as Record<string, unknown> | undefined;
@@ -425,13 +449,17 @@ export function setupConversationWebSocket(
                   default: break;
                 }
 
-                return {
+                const normalized: TrajectoryStep & { clientMessageId?: string } = {
                   stepId: (metadata?.executionId as string) ?? `step-${idx}`,
                   type,
                   status,
                   content: text ? { text } : undefined,
                   ...(toolOnly ? { toolOnly: true } : {}),
                 };
+                if (typeof raw.clientMessageId === "string") {
+                  normalized.clientMessageId = raw.clientMessageId;
+                }
+                return normalized;
               });
 
               // Push full enriched steps (replaces skeleton)
@@ -474,8 +502,78 @@ export function setupConversationWebSocket(
           try {
             // ACTIVE 模式必须 overlap（抓取尾部 20 步）捕获“原地更新”
             grew = await fetchAndPush(true);
-          } catch {
-            // 轮询期允许失败：下一个 tick 会重试；minFetchOffset 相关恢复逻辑在后续任务中补齐
+          } catch (err) {
+            try {
+              if (realCascadeId && isRecoverableStepError(err)) {
+                const skipOffset = oversizedStepOffset(err);
+                const skipReason =
+                  skipOffset >= 0
+                    ? "Language Server: step exceeds 4MB protobuf limit"
+                    : "Language Server: invalid UTF-8 in step data";
+                const placeholder = placeholderStep(skipReason) as {
+                  userInput?: { items?: { text?: string }[] };
+                };
+                const placeholderText =
+                  placeholder.userInput?.items?.[0]?.text ?? skipReason;
+
+                let nextValidOffset = lastFetchOffset + 1;
+                if (skipOffset >= 0) {
+                  nextValidOffset = skipOffset + 1;
+                  console.log(
+                    `[ws:${shortId}] skipping corrupted step at offset ${skipOffset}`,
+                  );
+                } else {
+                  const { count, instance } = await getStepCount(
+                    realCascadeId,
+                    undefined,
+                    true,
+                  );
+                  const searchUpperBound = Math.max(
+                    lastFetchOffset + 1,
+                    Math.min(
+                      count > 0 ? count : lastFetchOffset + MAX_SKIP,
+                      lastFetchOffset + MAX_SKIP,
+                    ),
+                  );
+                  if (searchUpperBound > lastFetchOffset + 1) {
+                    nextValidOffset = await findNextValidOffset(
+                      realCascadeId,
+                      lastFetchOffset + 1,
+                      searchUpperBound,
+                      instance,
+                    );
+                  }
+                  console.log(
+                    `[ws:${shortId}] skipping corrupted range [${lastFetchOffset}, ${nextValidOffset - 1}] (${Math.max(1, nextValidOffset - lastFetchOffset)} steps)`,
+                  );
+                }
+
+                const skipCount = Math.max(1, nextValidOffset - lastFetchOffset);
+                const placeholderSteps: TrajectoryStep[] = Array.from(
+                  { length: skipCount },
+                  (_, index) => ({
+                    stepId: `corrupted-${lastFetchOffset + index}`,
+                    type: "USER_INPUT",
+                    status: "DONE",
+                    content: { text: placeholderText },
+                  }),
+                );
+
+                sendJson({
+                  type: "steps",
+                  offset: lastFetchOffset,
+                  steps: placeholderSteps,
+                });
+
+                minFetchOffset = Math.max(minFetchOffset, nextValidOffset);
+                lastStepCount = Math.max(lastStepCount, nextValidOffset);
+                grew = true;
+              }
+            } catch (recoveryErr) {
+              console.log(
+                `[ws:${shortId}] step recovery failed: ${(recoveryErr as Error).message?.slice(0, 80)}`,
+              );
+            }
           }
 
           emptyCount = grew ? 0 : emptyCount + 1;

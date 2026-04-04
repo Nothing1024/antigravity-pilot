@@ -1,10 +1,12 @@
 import express from "express";
 
 import { RPCError } from "../rpc/client";
+import { runConversationMutation } from "../rpc/conversation-mutations";
 import type { LSInstance } from "../rpc/discovery";
 import { getMetadata, scanDiskConversations } from "../rpc/metadata";
 import {
   conversationAffinity,
+  conversationInstanceHints,
   discovery,
   getStepCount,
   normalizeWorkspaceId,
@@ -13,6 +15,7 @@ import {
   uriToWorkspaceId,
 } from "../rpc/routing";
 import { conversationSignals } from "../rpc/signals";
+import { messageTracker } from "../rpc/message-tracker";
 import {
   MAX_SKIP,
   findNextValidOffset,
@@ -396,8 +399,14 @@ conversationsRouter.post("/api/conversations", async (req, res) => {
 
     const newId =
       typeof data.cascadeId === "string" ? data.cascadeId : undefined;
-    if (newId && targetInstance?.workspaceId) {
-      conversationAffinity.set(newId, targetInstance.workspaceId);
+    const learnedWorkspaceId =
+      targetInstance?.workspaceId ??
+      (workspaceUri ? uriToWorkspaceId(workspaceUri) : undefined);
+    if (newId && learnedWorkspaceId) {
+      conversationAffinity.set(newId, learnedWorkspaceId);
+    }
+    if (newId && targetInstance) {
+      conversationInstanceHints.set(newId, targetInstance);
     }
     if (newId) {
       conversationSignals.emit("activate", newId);
@@ -412,41 +421,52 @@ conversationsRouter.post("/api/conversations", async (req, res) => {
 conversationsRouter.post("/api/conversations/:id/messages", async (req, res) => {
   const id = req.params.id;
   try {
-    const body = asRecord(req.body);
-    const metadata = await getMetadata(Boolean(body.fileAccessGranted));
+    return await runConversationMutation(id, async () => {
+      const body = asRecord(req.body);
+      const metadata = await getMetadata(Boolean(body.fileAccessGranted));
+      const clientMessageId =
+        typeof body.clientMessageId === "string" ? body.clientMessageId : undefined;
+      const { count: preSendStepCount, instance } = await getStepCount(id);
 
-    const rpcRequest: Record<string, unknown> = {
-      metadata,
-      cascadeId: id,
-      items: body.items,
-    };
-
-    if (Array.isArray(body.media) && body.media.length > 0) {
-      rpcRequest.media = body.media;
-    }
-
-    const plannerType = body.plannerType;
-    const plannerTypeConfig =
-      plannerType === "planning" ? { planning: {} } : { conversational: {} };
-
-    if (typeof body.model === "string" || plannerType !== undefined) {
-      rpcRequest.cascadeConfig = {
-        plannerConfig: {
-          plannerTypeConfig,
-          ...(typeof body.model === "string"
-            ? { requestedModel: { model: body.model } }
-            : {}),
+      const rpcRequest: Record<string, unknown> = {
+        metadata,
+        cascadeId: id,
+        userMessage: {
+          parts: Array.isArray(body.items) ? body.items : [],
         },
       };
-    }
 
-    const data = await rpcForConversation(
-      "SendUserCascadeMessage",
-      id,
-      rpcRequest,
-    );
-    conversationSignals.emit("activate", id);
-    res.json(data);
+      if (Array.isArray(body.media) && body.media.length > 0) {
+        rpcRequest.media = body.media;
+      }
+
+      const plannerType = body.plannerType;
+      const plannerTypeConfig =
+        plannerType === "planning" ? { planning: {} } : { conversational: {} };
+
+      if (typeof body.model === "string" || plannerType !== undefined) {
+        rpcRequest.cascadeConfig = {
+          plannerConfig: {
+            plannerTypeConfig,
+            ...(typeof body.model === "string"
+              ? { requestedModel: { model: body.model } }
+              : {}),
+          },
+        };
+      }
+
+      const data = await rpcForConversation(
+        "SendUserCascadeMessage",
+        id,
+        rpcRequest,
+        instance,
+      );
+      if (clientMessageId && clientMessageId.length > 0) {
+        messageTracker.trackPendingMessage(id, clientMessageId, preSendStepCount);
+      }
+      conversationSignals.emit("activate", id);
+      return res.json(data);
+    });
   } catch (err) {
     return sendRpcError(res, err);
   }

@@ -22,6 +22,7 @@ export const rpc = new RPCClient(discovery);
  * and used to route RPC calls to the correct LS instance.
  */
 export const conversationAffinity = new Map<string, string>(); // cascadeId → workspaceId
+export const conversationInstanceHints = new Map<string, LSInstance>(); // cascadeId → last known owner
 
 /**
  * Route an RPC call to the correct LS for a given conversation.
@@ -186,6 +187,37 @@ export async function resolveAndCall<T>(
     throw new RPCError("No LS instances available", "unavailable");
   }
 
+  const hinted = conversationInstanceHints.get(cascadeId);
+  if (hinted) {
+    const liveHint = instances.find(
+      (inst) =>
+        inst.pid === hinted.pid &&
+        inst.httpsPort === hinted.httpsPort,
+    );
+    if (liveHint) {
+      try {
+        if (verbose) {
+          console.log(
+            `[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → hint PID=${liveHint.pid}`,
+          );
+        }
+        const data = await rpc.call<T>(method, body, liveHint);
+        return { data, instance: liveHint };
+      } catch (err) {
+        if (
+          err instanceof RPCError &&
+          (err.code === "unavailable" || err.code === "not_found")
+        ) {
+          conversationInstanceHints.delete(cascadeId);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      conversationInstanceHints.delete(cascadeId);
+    }
+  }
+
   // Try the affinity LS first
   const wsId = conversationAffinity.get(cascadeId);
   if (wsId) {
@@ -197,6 +229,7 @@ export async function resolveAndCall<T>(
       try {
         if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → affinity ws=${wsId} PID=${preferred.pid}`);
         const data = await rpc.call<T>(method, body, preferred);
+        conversationInstanceHints.set(cascadeId, preferred);
         return { data, instance: preferred };
       } catch (err) {
         if (
@@ -220,7 +253,20 @@ export async function resolveAndCall<T>(
   if (owner) {
     if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → discovered owner PID=${owner.pid}${owner.workspaceId ? ` ws=${owner.workspaceId}` : ''}`);
     const data = await rpc.call<T>(method, body, owner);
+    conversationInstanceHints.set(cascadeId, owner);
     return { data, instance: owner };
+  }
+
+  if (!readOnly && instances.length === 1) {
+    const onlyInstance = instances[0];
+    if (verbose) {
+      console.log(
+        `[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → single-instance fallback PID=${onlyInstance.pid}`,
+      );
+    }
+    const data = await rpc.call<T>(method, body, onlyInstance);
+    conversationInstanceHints.set(cascadeId, onlyInstance);
+    return { data, instance: onlyInstance };
   }
 
   // Fallback for read-only operations: conversation not in any LS's memory
@@ -262,6 +308,7 @@ export async function resolveAndCall<T>(
         return b.stepCount - a.stepCount;
       });
       if (verbose) console.log(`[rpc:route] ${cascadeId.slice(0, 8)}… ${method} → try-all fallback PID=${results[0].instance.pid}`);
+      conversationInstanceHints.set(cascadeId, results[0].instance);
       return { data: results[0].data, instance: results[0].instance };
     }
     if (errors.length > 0) throw errors[0];
